@@ -9,18 +9,43 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@firebase/auth": "^1.7.9",
+    "@firebase/firestore": "^4.7.2",
+    "@firebase/storage": "^0.13.2",
+    "@firebasegen/default": "file:generated/javascript/default",
+    "@nextui-org/navbar": "^2.0.37",
+    "@nextui-org/react": "^2.4.8",
+    "@nextui-org/system": "^2.2.6",
+    "@nextui-org/theme": "^2.2.11",
+    "@radix-ui/react-dialog": "^1.1.1",
+    "@radix-ui/react-icons": "^1.3.0",
+    "@radix-ui/react-label": "^2.1.0",
+    "@radix-ui/react-slot": "^1.1.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "dialog": "^0.3.1",
+    "firebase": "^10.13.2",
+    "framer-motion": "^11.8.0",
+    "lucide-react": "^0.441.0",
+    "next": "14.2.11",
+    "qrcode": "^1.5.4",
     "react": "^18",
     "react-dom": "^18",
-    "next": "14.2.11"
+    "react-firebase-hooks": "^5.1.1",
+    "react-native-svg": "^15.7.1",
+    "react-qr-code": "^2.0.15",
+    "tailwind-merge": "^2.5.2",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.11",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.11"
+    "typescript": "^5"
   }
 }
