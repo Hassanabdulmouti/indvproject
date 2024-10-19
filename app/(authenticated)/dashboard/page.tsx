@@ -33,6 +33,17 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleContentDeleted = async () => {
+    if (selectedBox) {
+      try {
+        const updatedContents = await getBoxContents(selectedBox.id);
+        setBoxContents(updatedContents);
+      } catch (err) {
+        setError('Failed to refresh box contents');
+      }
+    }
+  };
+
   useEffect(() => {
     const fetchBoxes = async () => {
       if (user) {
@@ -106,6 +117,7 @@ const Dashboard: React.FC = () => {
             boxContents={boxContents}
             onAddContent={handleAddContent}
             onClose={handleCloseDialog}
+            onContentDeleted={handleContentDeleted}
           />
         )}
       </Dialog>

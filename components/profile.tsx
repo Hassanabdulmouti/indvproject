@@ -1,83 +1,97 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth, db } from '@/firebase/clientApp';
-import { updateProfile, updateEmail, updatePassword, deleteUser, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import React, { useState, useEffect } from 'react'
+import { useAuthState } from 'react-firebase-hooks/auth'
+import { auth } from '@/firebase/clientApp'
+import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
+import { useRouter } from 'next/navigation'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { updateUserProfile, deactivateAccount, deleteAccount, sendDeactivationEmail } from '@/firebase/dbOp'
 
 const Profile = () => {
-  const [user, loading] = useAuthState(auth);
-  const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const router = useRouter();
+  const [user, loading] = useAuthState(auth)
+  const [displayName, setDisplayName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isDeactivateDialogOpen, setIsDeactivateDialogOpen] = useState(false)
+  const [isNotificationDialogOpen, setIsNotificationDialogOpen] = useState(false)
+  const [notificationMessage, setNotificationMessage] = useState('')
+  const router = useRouter()
 
   useEffect(() => {
     if (user) {
-      setDisplayName(user.displayName || '');
-      setEmail(user.email || '');
+      setDisplayName(user.displayName || '')
+      setEmail(user.email || '')
     }
-  }, [user]);
+  }, [user])
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    if (!user) return;
+    e.preventDefault()
+    if (!user) return
 
     try {
-      if (displayName !== user.displayName) {
-        await updateProfile(user, { displayName });
-      }
-      
-      if (email !== user.email) {
-        await updateEmail(user, email);
-      }
-      
-      if (password) {
-        await updatePassword(user, password);
-      }
+      await updateUserProfile(user.uid, {
+        displayName: displayName !== user.displayName ? displayName : undefined,
+        email: email !== user.email ? email : undefined,
+        password: password || undefined
+      })
 
-      setSuccess('Profile updated successfully');
+      setNotificationMessage('Profile updated successfully')
+      setIsNotificationDialogOpen(true)
     } catch (error) {
-      setError((error as Error).message);
+      setNotificationMessage((error as Error).message)
+      setIsNotificationDialogOpen(true)
     }
-  };
+  }
 
   const handleDeleteAccount = async () => {
-    if (!user || !currentPassword) return;
+    if (!user || !currentPassword) return
 
     try {
-      const credential = EmailAuthProvider.credential(user.email!, currentPassword);
-      await reauthenticateWithCredential(user, credential);
+      const credential = EmailAuthProvider.credential(user.email!, currentPassword)
+      await reauthenticateWithCredential(user, credential)
       
-      // Delete user data from Firestore
-      await deleteDoc(doc(db, 'users', user.uid));
+      await deleteAccount(user.uid)
       
-      // Delete user authentication
-      await deleteUser(user);
-      
-      router.push('/');
+      setNotificationMessage('Your account has been deleted.')
+      setIsNotificationDialogOpen(true)
+      setTimeout(() => router.push('/'), 2000)
     } catch (error) {
-      setError((error as Error).message);
+      setNotificationMessage((error as Error).message)
+      setIsNotificationDialogOpen(true)
     }
-  };
+  }
 
-  if (loading) return <div>Loading...</div>;
-  if (!user) return <div>You must be logged in to view this page</div>;
+  const handleDeactivateAccount = async () => {
+    if (!user || !currentPassword) return
+
+    try {
+      const credential = EmailAuthProvider.credential(user.email!, currentPassword)
+      await reauthenticateWithCredential(user, credential)
+
+      await deactivateAccount(user.uid)
+      await sendDeactivationEmail(user.email!)
+
+      setNotificationMessage('Your account has been deactivated. An email confirmation has been sent.')
+      setIsNotificationDialogOpen(true)
+      setTimeout(() => {
+        auth.signOut()
+        router.push('/login')
+      }, 2000)
+    } catch (error) {
+      setNotificationMessage((error as Error).message)
+      setIsNotificationDialogOpen(true)
+    }
+  }
+
+  if (loading) return <div>Loading...</div>
+  if (!user) return <div>You must be logged in to view this page</div>
 
   return (
     <div className="container mx-auto p-4">
@@ -119,6 +133,29 @@ const Profile = () => {
           </form>
         </CardContent>
         <CardFooter className="flex justify-between">
+          <Dialog open={isDeactivateDialogOpen} onOpenChange={setIsDeactivateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">Deactivate Account</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Are you sure you want to deactivate your account?</DialogTitle>
+                <DialogDescription>
+                  Your account will be disabled, but you can reactivate it later. Please enter your current password to confirm.
+                </DialogDescription>
+              </DialogHeader>
+              <Input
+                type="password"
+                placeholder="Current Password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+              />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDeactivateDialogOpen(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={handleDeactivateAccount}>Deactivate Account</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="destructive">Delete Account</Button>
@@ -144,10 +181,21 @@ const Profile = () => {
           </Dialog>
         </CardFooter>
       </Card>
-      {error && <Alert variant="destructive" className="mt-4"><AlertDescription>{error}</AlertDescription></Alert>}
-      {success && <Alert variant="default" className="mt-4"><AlertDescription>{success}</AlertDescription></Alert>}
+      
+      {/* Notification Dialog */}
+      <Dialog open={isNotificationDialogOpen} onOpenChange={setIsNotificationDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Notification</DialogTitle>
+          </DialogHeader>
+          <DialogDescription>{notificationMessage}</DialogDescription>
+          <DialogFooter>
+            <Button onClick={() => setIsNotificationDialogOpen(false)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
-  );
-};
+  )
+}
 
-export default Profile;
+export default Profile

@@ -259,7 +259,6 @@ const CreateBoxForm: React.FC = () => {
             />
           </div>
           <div>
-            
             <Label>Select Packaging Symbols (up to 3)</Label>
             <div className="flex space-x-2 mt-2">
               {packagingSymbols.map((symbol) => (

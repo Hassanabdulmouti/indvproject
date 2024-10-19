@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { initializeApp } from 'firebase/app'
-import { getAuth, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,6 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { auth, googleProvider } from "@/firebase/clientApp"
 import { Icons } from "@/components/ui/icons"
 import { useRouter } from 'next/navigation'
+import { getUserDetails, reactivateAccount } from '@/firebase/dbOp'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -23,12 +23,26 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setIsLoading(true)
-
     try {
-      await signInWithEmailAndPassword(auth, email, password)
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      const user = userCredential.user
+
+      const userData = await getUserDetails(user.uid)
+
+      if (!userData.isActive) {
+        if (confirm('Your account is deactivated. Would you like to reactivate it?')) {
+          await reactivateAccount(user.uid)
+          console.log('Account reactivated')
+        } else {
+          await auth.signOut()
+          setError('Login cancelled. Account remains deactivated.')
+          setIsLoading(false)
+          return
+        }
+      }
+
       console.log('Logged in successfully')
       router.push('/')
-      
     } catch (error) {
       setError((error as Error).message)
     } finally {
@@ -39,9 +53,24 @@ export default function Login() {
   const handleGoogleLogin = async () => {
     setError('')
     setIsLoading(true)
-
     try {
-      await signInWithPopup(auth, googleProvider)
+      const result = await signInWithPopup(auth, googleProvider)
+      const user = result.user
+
+      const userData = await getUserDetails(user.uid)
+
+      if (!userData.isActive) {
+        if (confirm('Your account is deactivated. Would you like to reactivate it?')) {
+          await reactivateAccount(user.uid)
+          console.log('Account reactivated')
+        } else {
+          await auth.signOut()
+          setError('Login cancelled. Account remains deactivated.')
+          setIsLoading(false)
+          return
+        }
+      }
+
       console.log('Logged in with Google successfully')
       router.push('/')
     } catch (error) {

@@ -1,6 +1,11 @@
 import { db, auth, storage } from './clientApp';
 import { collection, doc, setDoc, getDoc, updateDoc, addDoc, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL, uploadBytes } from 'firebase/storage';
+import { updateProfile, updateEmail, updatePassword, deleteUser } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/firebase/clientApp';
+
+
 
 export interface Box {
   id: string;
@@ -30,9 +35,76 @@ export const createUser = async (uid: string, email: string, displayName: string
   await setDoc(userRef, {
     email,
     displayName,
+    isActive: true,
     createdAt: new Date(),
     updatedAt: new Date()
   });
+};
+
+export const deactivateAccount = async (uid: string) => {
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, {
+    isActive: false,
+    deactivatedAt: new Date()
+  });
+};
+
+export const reactivateAccount = async (uid: string) => {
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, {
+    isActive: true,
+    deactivatedAt: null
+  });
+};
+
+export const deleteAccount = async (uid: string) => {
+  // Delete user data from Firestore
+  await deleteDoc(doc(db, 'users', uid));
+  
+  // Delete user authentication
+  const user = auth.currentUser;
+  if (user) {
+    await deleteUser(user);
+  }
+};
+
+export const updateUserProfile = async (uid: string, updates: {
+  displayName?: string;
+  email?: string;
+  password?: string;
+}) => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('User not authenticated');
+
+  if (updates.displayName) {
+    await updateProfile(user, { displayName: updates.displayName });
+  }
+  
+  if (updates.email) {
+    await updateEmail(user, updates.email);
+  }
+  
+  if (updates.password) {
+    await updatePassword(user, updates.password);
+  }
+
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, {
+    ...(updates.displayName && { displayName: updates.displayName }),
+    ...(updates.email && { email: updates.email }),
+    updatedAt: new Date()
+  });
+};
+
+export const getUserDetails = async (uid: string) => {
+  const userRef = doc(db, 'users', uid);
+  const userSnap = await getDoc(userRef);
+  
+  if (userSnap.exists()) {
+    return userSnap.data();
+  } else {
+    throw new Error('User not found');
+  }
 };
 
 export const createBox = async (name: string, description: string, designSvg: string): Promise<string> => {
@@ -87,6 +159,10 @@ export const getUserBoxes = async (userId: string): Promise<Box[]> => {
   }));
 };
 
+export const deleteBoxContent = async (contentId: string) => {
+  const contentRef = doc(db, 'contents', contentId);
+  await deleteDoc(contentRef);
+};
 
 export const getBoxContents = async (boxId: string): Promise<BoxContent[]> => {
   const contentsRef = collection(db, 'contents');
@@ -115,4 +191,10 @@ export const getBoxDetails = async (boxId: string): Promise<Box> => {
   } else {
     throw new Error('Box not found');
   }
+};
+
+
+export const sendDeactivationEmail = async (email: string) => {
+  const sendEmail = httpsCallable(functions, 'sendDeactivationEmail');
+  await sendEmail({ email });
 };
