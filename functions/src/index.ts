@@ -7,8 +7,7 @@
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
 
-import {onRequest} from "firebase-functions/v2/https";
-import * as logger from "firebase-functions/logger";
+
 
 // Start writing functions
 // https://firebase.google.com/docs/functions/typescript
@@ -42,7 +41,7 @@ export const sendDeactivationEmail = functions.https.onCall(async (data, context
   const { email } = data;
 
   const mailOptions = {
-    from: '"Your App Name" <noreply@yourapp.com>',
+    from: 'Your App Name" <noreply@yourapp.com>',
     to: email,
     subject: 'Account Deactivation Confirmation',
     text: 'Your account has been deactivated. If you wish to reactivate your account, please log in to your account.',
