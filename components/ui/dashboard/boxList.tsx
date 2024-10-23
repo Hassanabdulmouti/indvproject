@@ -1,6 +1,6 @@
 import React from 'react';
 import BoxCard from './boxCard';
-import { Box } from '@/firebase/dbOp'; // Import the Box interface from dbOp
+import { Box } from '@/firebase/dbOp';
 
 interface BoxListProps {
   boxes: Box[];

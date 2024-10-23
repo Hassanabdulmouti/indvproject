@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Eye, EyeOff } from 'lucide-react';
+import { Switch } from "@/components/ui/switch";
 import QRCode from 'qrcode';
 import { createBox } from '@/firebase/dbOp';
 
@@ -156,6 +157,9 @@ const CreateBoxForm: React.FC = () => {
   const [selectedSymbols, setSelectedSymbols] = useState<PackagingSymbol[]>([]);
   const [selectedDesign, setSelectedDesign] = useState<Design>(designs[0]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isPrivate, setIsPrivate] = useState<boolean>(false);
+  const [accessCode, setAccessCode] = useState<string>('');
+  const [showAccessCode, setShowAccessCode] = useState<boolean>(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -212,13 +216,15 @@ const CreateBoxForm: React.FC = () => {
       setIsLoading(true);
       try {
         const pngDataUrl = canvasRef.current.toDataURL('image/png');
-        await createBox(newBoxName, newBoxDescription, pngDataUrl);
+        await createBox(newBoxName, newBoxDescription, pngDataUrl, isPrivate, isPrivate ? accessCode : undefined);
         
         // Reset form
         setNewBoxName('');
         setNewBoxDescription('');
         setQRCodeData('');
         setSelectedSymbols([]);
+        setIsPrivate(false);
+        setAccessCode('');
         
         // You might want to show a success message or redirect the user here
         console.log('Box created successfully!');
@@ -229,6 +235,10 @@ const CreateBoxForm: React.FC = () => {
         setIsLoading(false);
       }
     }
+  };
+
+  const handleAccessCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAccessCode(e.target.value.replace(/\D/g, '').slice(0, 6));
   };
 
   return (
@@ -288,12 +298,46 @@ const CreateBoxForm: React.FC = () => {
               ))}
             </div>
           </div>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="private-mode"
+              checked={isPrivate}
+              onCheckedChange={setIsPrivate}
+            />
+            <Label htmlFor="private-mode">Private Box</Label>
+          </div>
+          {isPrivate && (
+            <div className="space-y-2">
+              <Label htmlFor="accessCode">Access Code (6 digits)</Label>
+              <div className="relative">
+                <Input
+                  id="accessCode"
+                  type={showAccessCode ? "text" : "password"}
+                  value={accessCode}
+                  onChange={handleAccessCodeChange}
+                  placeholder="Enter 6-digit access code"
+                  pattern="\d{6}"
+                  required={isPrivate}
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowAccessCode(!showAccessCode)}
+                >
+                  {showAccessCode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          )}
           {qrCodeData && (
             <div className="mt-4">
               <canvas ref={canvasRef} width={300} height={400} style={{ width: '300px', height: '400px' }} />
             </div>
           )}
-          <Button type="submit" disabled={!newBoxName.trim() || !qrCodeData || isLoading}>
+          <Button type="submit" disabled={!newBoxName.trim() || !qrCodeData || isLoading || (isPrivate && accessCode.length !== 6)}>
             <PlusCircle className="mr-2 h-4 w-4" /> 
             {isLoading ? 'Creating...' : 'Create Box'}
           </Button>

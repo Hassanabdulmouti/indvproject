@@ -22,6 +22,8 @@
     "@radix-ui/react-label": "^2.1.0",
     "@radix-ui/react-scroll-area": "^1.2.0",
     "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-switch": "^1.1.1",
+    "@radix-ui/react-tabs": "^1.1.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "dialog": "^0.3.1",
@@ -38,6 +40,7 @@
     "react-firebase-hooks": "^5.1.1",
     "react-native-svg": "^15.7.1",
     "react-qr-code": "^2.0.15",
+    "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7"
   },

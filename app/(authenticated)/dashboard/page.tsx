@@ -118,6 +118,9 @@ const Dashboard: React.FC = () => {
             onAddContent={handleAddContent}
             onClose={handleCloseDialog}
             onContentDeleted={handleContentDeleted}
+            onBoxUpdated={(updatedBox: Box) => {
+              setBoxes(prevBoxes => prevBoxes.map(box => box.id === updatedBox.id ? updatedBox : box));
+            }}
           />
         )}
       </Dialog>

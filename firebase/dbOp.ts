@@ -5,6 +5,15 @@ import { updateProfile, updateEmail, updatePassword, deleteUser } from 'firebase
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/firebase/clientApp';
 
+export interface User {
+  uid: string;
+  email: string;
+  displayName: string;
+  isAdmin: boolean;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 
 export interface Box {
@@ -14,6 +23,8 @@ export interface Box {
   createdAt: Date;
   updatedAt: Date;
   qrCodeUrl: string;
+  isPrivate: boolean;
+  accessCode?: string;
 }
 
 export interface BoxContent {
@@ -30,42 +41,59 @@ export const uploadDesign = async (userId: string, boxId: string, designSvg: str
   return await getDownloadURL(designRef);
 };
 
-export const createUser = async (uid: string, email: string, displayName: string) => {
+export const createUser = async (uid: string, email: string, displayName: string, isAdmin: boolean = false) => {
   const userRef = doc(db, 'users', uid);
   await setDoc(userRef, {
     email,
     displayName,
+    isAdmin,
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date()
   });
 };
 
-export const deactivateAccount = async (uid: string) => {
-  const userRef = doc(db, 'users', uid);
-  await updateDoc(userRef, {
-    isActive: false,
-    deactivatedAt: new Date()
+export const updateBoxPrivacy = async (boxId: string, isPrivate: boolean, accessCode?: string): Promise<void> => {
+  const boxRef = doc(db, 'boxes', boxId);
+
+  if (isPrivate && (!accessCode || accessCode.length !== 6)) {
+    throw new Error('Access code must be 6 digits for private boxes');
+  }
+
+  const updateData: { isPrivate: boolean; accessCode?: string | null } = { isPrivate };
+
+  if (isPrivate) {
+    updateData.accessCode = accessCode;
+  } else {
+    updateData.accessCode = null;
+  }
+
+  await updateDoc(boxRef, {
+    ...updateData,
+    updatedAt: new Date()
   });
+};
+
+export const getAllUsers = async (): Promise<User[]> => {
+  const getAllUsersFunction = httpsCallable(functions, 'getAllUsers');
+  const result = await getAllUsersFunction();
+  const data = result.data as { users: User[] };
+  return data.users;
+};
+
+export const deactivateAccount = async (uid: string) => {
+  const toggleAccountActivationFunction = httpsCallable(functions, 'toggleAccountActivation');
+  await toggleAccountActivationFunction({ targetUid: uid, isActive: false });
 };
 
 export const reactivateAccount = async (uid: string) => {
-  const userRef = doc(db, 'users', uid);
-  await updateDoc(userRef, {
-    isActive: true,
-    deactivatedAt: null
-  });
+  const toggleAccountActivationFunction = httpsCallable(functions, 'toggleAccountActivation');
+  await toggleAccountActivationFunction({ targetUid: uid, isActive: true });
 };
 
 export const deleteAccount = async (uid: string) => {
-  // Delete user data from Firestore
-  await deleteDoc(doc(db, 'users', uid));
-  
-  // Delete user authentication
-  const user = auth.currentUser;
-  if (user) {
-    await deleteUser(user);
-  }
+  const deleteUserAccountFunction = httpsCallable(functions, 'deleteUserAccount');
+  await deleteUserAccountFunction({ targetUid: uid });
 };
 
 export const updateUserProfile = async (uid: string, updates: {
@@ -95,19 +123,18 @@ export const updateUserProfile = async (uid: string, updates: {
     updatedAt: new Date()
   });
 };
-
 export const getUserDetails = async (uid: string) => {
   const userRef = doc(db, 'users', uid);
   const userSnap = await getDoc(userRef);
   
   if (userSnap.exists()) {
-    return userSnap.data();
+    return userSnap.data() as User;
   } else {
     throw new Error('User not found');
   }
 };
 
-export const createBox = async (name: string, description: string, designSvg: string): Promise<string> => {
+export const createBox = async (name: string, description: string, designSvg: string, isPrivate: boolean, accessCode?: string): Promise<string> => {
   const user = auth.currentUser;
   if (!user) throw new Error('User not authenticated');
   
@@ -117,7 +144,9 @@ export const createBox = async (name: string, description: string, designSvg: st
     name,
     description,
     createdAt: new Date(),
-    updatedAt: new Date()
+    updatedAt: new Date(),
+    isPrivate,
+    ...(isPrivate && accessCode && { accessCode })
   });
   
   const qrCodeUrl = await uploadDesign(user.uid, newBox.id, designSvg);
@@ -125,20 +154,37 @@ export const createBox = async (name: string, description: string, designSvg: st
   
   return newBox.id;
 };
+
 export const deleteBox = async (boxId: string) => {
   const boxRef = doc(db, 'boxes', boxId);
   await deleteDoc(boxRef);
 };
 
-export const addContentToBox = async (boxId: string, type: 'text' | 'audio' | 'image' | 'document', value: string) => {
+export const addContentToBox = async (boxId: string, type: 'text' | 'audio' | 'image' | 'document', content: string | File) => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('User not authenticated');
+
+  let value: string;
+
+  if (typeof content === 'string') {
+    value = content;
+  } else {
+    // File upload
+    const storageRef = ref(storage, `boxes/${boxId}/${type}/${content.name}`);
+    await uploadBytes(storageRef, content);
+    value = await getDownloadURL(storageRef);
+  }
+
   const contentsRef = collection(db, 'contents');
-  await addDoc(contentsRef, {
+  const newContent = await addDoc(contentsRef, {
     boxId,
     type,
     value,
     createdAt: new Date(),
     updatedAt: new Date()
   });
+
+  return newContent.id;
 };
 
 export const uploadFile = async (file: File, path: string): Promise<string> => {
@@ -193,8 +239,33 @@ export const getBoxDetails = async (boxId: string): Promise<Box> => {
   }
 };
 
+export const validateAccessCode = async (boxId: string, accessCode: string): Promise<boolean> => {
+  const boxRef = doc(db, 'boxes', boxId);
+  const boxSnap = await getDoc(boxRef);
+  
+  if (boxSnap.exists()) {
+    const boxData = boxSnap.data() as Box;
+    return boxData.accessCode === accessCode;
+  }
+  
+  return false;
+};
 
 export const sendDeactivationEmail = async (email: string) => {
   const sendEmail = httpsCallable(functions, 'sendDeactivationEmail');
   await sendEmail({ email });
 };
+
+export const setAdminStatus = async (uid: string, isAdmin: boolean) => {
+  const setAdminStatusFunction = httpsCallable(functions, 'setAdminStatus');
+  await setAdminStatusFunction({ targetUid: uid, isAdmin });
+};
+
+export const isCurrentUserAdmin = async (): Promise<boolean> => {
+  const user = auth.currentUser;
+  if (!user) return false;
+  
+  const userDetails = await getUserDetails(user.uid);
+  return userDetails.isAdmin === true;
+};
+
