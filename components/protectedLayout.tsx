@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { sendEmailVerification } from 'firebase/auth';
+import { useActivityTracking } from '@/hooks/useActivityTracking';
 
 interface ProtectedLayoutProps {
   children: ReactNode;
@@ -16,6 +17,9 @@ const ProtectedLayout: React.FC<ProtectedLayoutProps> = ({ children }) => {
   const [user, loading, authError] = useAuthState(auth);
   const router = useRouter();
   const [sendingVerification, setSendingVerification] = useState(false);
+
+  // Initialize activity tracking
+  useActivityTracking();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -38,18 +42,30 @@ const ProtectedLayout: React.FC<ProtectedLayoutProps> = ({ children }) => {
     }
   };
 
+  // Show loading state
   if (loading) {
-    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      </div>
+    );
   }
 
+  // Show authentication errors
   if (authError) {
-    return <Alert variant="destructive"><AlertDescription>Authentication error: {authError.message}</AlertDescription></Alert>;
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>Authentication error: {authError.message}</AlertDescription>
+      </Alert>
+    );
   }
 
+  // Return null if no user (will redirect in useEffect)
   if (!user) {
     return null;
   }
 
+  // Show email verification prompt if email not verified
   if (!user.emailVerified) {
     return (
       <div className="container mx-auto p-4">
@@ -58,7 +74,11 @@ const ProtectedLayout: React.FC<ProtectedLayoutProps> = ({ children }) => {
             Your email is not verified. Please verify your email to access all features.
           </AlertDescription>
         </Alert>
-        <Button onClick={handleResendVerification} disabled={sendingVerification} className="mt-4">
+        <Button 
+          onClick={handleResendVerification} 
+          disabled={sendingVerification} 
+          className="mt-4"
+        >
           {sendingVerification ? 'Sending...' : 'Resend Verification Email'}
         </Button>
       </div>

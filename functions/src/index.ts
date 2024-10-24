@@ -7,12 +7,14 @@ import * as nodemailer from 'nodemailer';
 admin.initializeApp();
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: functions.config().gmail.email,
-      pass: functions.config().gmail.password,
-    },
-  });
+  service: 'gmail',
+  auth: {
+    user: functions.config().gmail.email,
+    pass: functions.config().gmail.password,
+  },
+  secure: true
+});
+
 
   export const shareBoxViaEmail = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
@@ -86,7 +88,7 @@ const transporter = nodemailer.createTransport({
             <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;" />
             
             <p style="color: #666; font-size: 12px;">
-              This is an automated message from YourApp. Please do not reply to this email.
+              This is an automated message from Moveout project. Please do not reply to this email.
             </p>
           </div>
         `
@@ -120,7 +122,7 @@ export const sendDeactivationEmail = functions.https.onCall(async (data, context
   const { email } = data;
 
   const mailOptions = {
-    from: 'Your App Name <noreply@yourapp.com>',
+    from: 'Moveout project <noreply@yourapp.com>',
     to: email,
     subject: 'Account Deactivation Confirmation',
     text: 'Your account has been deactivated. If you wish to reactivate your account, please log in to your account.',
@@ -322,10 +324,8 @@ interface UserData {
   deactivationReason?: string;
 }
 
-// Testing constants (in minutes)
-const INACTIVITY_THRESHOLD_MINUTES = 5;
-const REMINDER_MINUTES_BEFORE = 2;
-const CHECK_INTERVAL_MINUTES = 1; // Check every minute for testing
+const FIVE_MINUTES_MS = 5 * 60 * 1000;
+const TWO_MINUTES_MS = 2 * 60 * 1000;
 
 export const updateUserLastActivity = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
@@ -344,44 +344,51 @@ export const updateUserLastActivity = functions.https.onCall(async (data, contex
   }
 });
 
-// Update the schedule to run every minute for testing
 export const checkInactiveUsers = functions.pubsub
-  .schedule(`every ${CHECK_INTERVAL_MINUTES} minutes`)
+  .schedule('*/1 * * * *')  // Runs every minute using cron syntax
+  .timeZone('UTC')          // Specify the timezone
   .onRun(async (context) => {
+    console.log('Starting inactive users check...');
+    
     try {
-      const now = admin.firestore.Timestamp.now();
+      const now = Date.now();
       
-      // Convert minutes to milliseconds for threshold calculations
-      const inactivityThreshold = new Date(
-        now.toDate().getTime() - (INACTIVITY_THRESHOLD_MINUTES * 60 * 1000)
-      );
-      const reminderThreshold = new Date(
-        now.toDate().getTime() - ((INACTIVITY_THRESHOLD_MINUTES - REMINDER_MINUTES_BEFORE) * 60 * 1000)
-      );
+      // Calculate threshold timestamps
+      const inactivityThreshold = new Date(now - FIVE_MINUTES_MS);
+      const reminderThreshold = new Date(now - (FIVE_MINUTES_MS - TWO_MINUTES_MS));
 
-      console.log('Checking for inactive users...'); // Debug log
-      console.log(`Inactivity threshold: ${inactivityThreshold}`);
-      console.log(`Reminder threshold: ${reminderThreshold}`);
+      console.log('Thresholds calculated:', {
+        currentTime: new Date(now).toISOString(),
+        inactivityThreshold: inactivityThreshold.toISOString(),
+        reminderThreshold: reminderThreshold.toISOString()
+      });
 
-      const usersSnapshot = await admin.firestore().collection('users')
+      // Get active users
+      const usersSnapshot = await admin.firestore()
+        .collection('users')
         .where('isActive', '==', true)
         .get();
 
-      console.log(`Found ${usersSnapshot.size} active users`); // Debug log
+      console.log(`Found ${usersSnapshot.size} active users to check`);
 
       const batch = admin.firestore().batch();
       const emailPromises: Promise<any>[] = [];
+      let hasUpdates = false;
 
+      // Process each user
       for (const userDoc of usersSnapshot.docs) {
         const userData = userDoc.data() as UserData;
         const lastActivity = userData.lastActivity?.toDate() || userData.createdAt.toDate();
+        const timeSinceLastActivity = now - lastActivity.getTime();
 
-        console.log(`Checking user ${userData.email}`); // Debug log
-        console.log(`Last activity: ${lastActivity}`);
+        console.log(`Processing user ${userData.email}:`, {
+          lastActivity: lastActivity.toISOString(),
+          minutesInactive: timeSinceLastActivity / 1000 / 60
+        });
 
-        // Check for users who need to be deactivated
+        // Check for deactivation (over 5 minutes inactive)
         if (lastActivity < inactivityThreshold) {
-          console.log(`Deactivating user ${userData.email}`); // Debug log
+          console.log(`Deactivating user ${userData.email}`);
           
           batch.update(userDoc.ref, {
             isActive: false,
@@ -389,37 +396,65 @@ export const checkInactiveUsers = functions.pubsub
             deactivationReason: 'inactivity',
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
           });
+          hasUpdates = true;
 
-          emailPromises.push(sendDeactivationNotification(userData.email));
+          emailPromises.push(
+            sendDeactivationNotification(userData.email)
+              .catch(error => {
+                console.error(`Failed to send deactivation email to ${userData.email}:`, error);
+                return null;
+              })
+          );
         }
-        // Check for users who need a reminder
+        // Check for reminder (3 minutes inactive)
         else if (
           lastActivity < reminderThreshold &&
           (!userData.lastReminderSent || userData.lastReminderSent.toDate() < reminderThreshold)
         ) {
-          console.log(`Sending reminder to user ${userData.email}`); // Debug log
+          console.log(`Preparing reminder for user ${userData.email}`);
           
           batch.update(userDoc.ref, {
             lastReminderSent: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
           });
+          hasUpdates = true;
 
-          const minutesLeft = REMINDER_MINUTES_BEFORE;
-          emailPromises.push(sendInactivityReminder(userData.email, {
-            minutesUntilDeactivation: minutesLeft,
-            lastActivity: lastActivity
-          }));
+          const minutesLeft = Math.max(1, Math.ceil((FIVE_MINUTES_MS - timeSinceLastActivity) / 1000 / 60));
+          
+          emailPromises.push(
+            sendInactivityReminder(userData.email, {
+              minutesUntilDeactivation: minutesLeft,
+              lastActivity: lastActivity
+            })
+              .catch(error => {
+                console.error(`Failed to send reminder email to ${userData.email}:`, error);
+                return null;
+              })
+          );
         }
       }
 
-      await batch.commit();
-      await Promise.all(emailPromises);
+      // Commit batch if there are updates
+      if (hasUpdates) {
+        try {
+          await batch.commit();
+          console.log('Successfully committed batch updates');
+        } catch (error) {
+          console.error('Error committing batch updates:', error);
+          throw error;
+        }
+      }
 
-      console.log('Finished checking inactive users'); // Debug log
-      return { success: true };
+      // Wait for all emails to be sent
+      if (emailPromises.length > 0) {
+        const results = await Promise.allSettled(emailPromises);
+        console.log(`Email operations completed: ${results.length} total`);
+      }
+
+      return null; // Proper return type for Cloud Functions
     } catch (error) {
-      console.error('Error checking inactive users:', error);
-      return { error: 'Failed to check inactive users' };
+      console.error('Error in checkInactiveUsers:', error);
+      throw error;
     }
 });
 
@@ -427,58 +462,59 @@ interface InactivityReminderData {
   minutesUntilDeactivation: number;
   lastActivity: Date;
 }
-
 async function sendInactivityReminder(email: string, data: InactivityReminderData) {
+  console.log(`Sending inactivity reminder email to ${email}`, data);
+  
   const mailOptions = {
-    from: `"Your App" <${functions.config().gmail.email}>`,
+    from: `"Moveout project" <${functions.config().gmail.email}>`,
     to: email,
-    subject: '⚠️ Account Inactivity Warning - Action Required in 2 Minutes',
+    subject: '⚠️ Account Inactivity Warning - Action Required',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #ff9900;">⚠️ Urgent: Account Inactivity Warning</h2>
-        <p>We noticed you haven't been active in your account since ${data.lastActivity.toLocaleTimeString()}.</p>
+        <h2 style="color: #ff9900;">⚠️ Account Inactivity Warning</h2>
+        <p>We noticed you haven't been active in your account since ${data.lastActivity.toLocaleString()}.</p>
         <p style="color: #ff0000; font-weight: bold;">
-          Your account will be automatically deactivated in ${data.minutesUntilDeactivation} minutes!
+          Your account will be automatically deactivated in ${data.minutesUntilDeactivation} ${
+            data.minutesUntilDeactivation === 1 ? 'minute' : 'minutes'
+          }!
         </p>
-        <p>To keep your account active, please log in immediately.</p>
-        <p>
-          <a href="${functions.config().app.url}/auth/login" 
-             style="display: inline-block; padding: 10px 20px; background-color: #ff9900; color: white; text-decoration: none; border-radius: 5px;">
-            Log In Now
-          </a>
-        </p>
+        <p>To keep your account active, please take any action in the app (click, type, or scroll).</p>
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;" />
         <p style="color: #666; font-size: 12px;">
-          This is a test notification. In production, the deactivation period would be longer.
+          This is a testing notification. Time shown is in your local timezone.
         </p>
       </div>
     `
   };
 
-  return transporter.sendMail(mailOptions);
+  return await transporter.sendMail(mailOptions);
 }
-
 async function sendDeactivationNotification(email: string) {
+  console.log(`Sending deactivation notification email to ${email}`);
+  
   const mailOptions = {
-    from: `"Your App" <${functions.config().gmail.email}>`,
+    from: `"Moveout project" <${functions.config().gmail.email}>`,
     to: email,
     subject: '🔒 Account Deactivated Due to Inactivity',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #ff0000;">Account Deactivated</h2>
         <p>Your account has been automatically deactivated due to 5 minutes of inactivity.</p>
-        <p>You can reactivate your account at any time by logging in:</p>
+        <p>You can reactivate your account by logging in again:</p>
         <p>
           <a href="${functions.config().app.url}/auth/login" 
              style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">
             Reactivate Account
           </a>
         </p>
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;" />
         <p style="color: #666; font-size: 12px;">
-          This is a test notification. In production, the deactivation period would be longer.
+          This is a testing notification. To prevent future deactivations, please maintain regular activity in the app.
         </p>
       </div>
     `
   };
 
-  return transporter.sendMail(mailOptions);
+  return await transporter.sendMail(mailOptions);
 }
+

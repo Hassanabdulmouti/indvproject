@@ -329,7 +329,3 @@ export const getUserStorageUsage = async (uid: string): Promise<StorageUsage> =>
 };
 
 
-export const updateUserLastActivity = async () => {
-  const updateLastActivityFunction = httpsCallable(functions, 'updateUserLastActivity');
-  await updateLastActivityFunction();
-};
