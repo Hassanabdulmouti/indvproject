@@ -10,8 +10,20 @@ import { auth } from '../firebase/clientApp';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/firebase/clientApp';
 
 const inter = Inter({ subsets: ['latin'] })
+
+// Activity tracking function
+const updateUserLastActivity = async () => {
+  const updateLastActivityFunction = httpsCallable(functions, 'updateUserLastActivity');
+  try {
+    await updateLastActivityFunction();
+  } catch (error) {
+    console.error('Error updating activity:', error);
+  }
+};
 
 export default function RootLayout({
   children,
@@ -25,6 +37,47 @@ export default function RootLayout({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Add activity tracking
+  useEffect(() => {
+    if (user) {
+      let timeout: NodeJS.Timeout;
+
+      // Update activity on initial load
+      updateUserLastActivity();
+
+      // Define the activity handler with debouncing
+      const handleActivity = () => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          updateUserLastActivity();
+        }, 5000); // Debounce for 5 seconds
+      };
+
+      // Events to track
+      const events = [
+        'mousedown',
+        'keydown',
+        'scroll',
+        'touchstart',
+        'click',
+        'mousemove'
+      ];
+
+      // Add event listeners
+      events.forEach(event => {
+        window.addEventListener(event, handleActivity);
+      });
+
+      // Cleanup function
+      return () => {
+        events.forEach(event => {
+          window.removeEventListener(event, handleActivity);
+        });
+        clearTimeout(timeout);
+      };
+    }
+  }, [user]); // Only re-run if user changes
 
   const handleLogout = async () => {
     await signOut(auth);

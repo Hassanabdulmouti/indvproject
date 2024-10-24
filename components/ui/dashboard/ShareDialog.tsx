@@ -16,6 +16,7 @@ import { functions } from '@/firebase/clientApp';
 import { httpsCallable } from 'firebase/functions';
 import { Box } from '@/firebase/dbOp';
 import { Loader2 } from 'lucide-react';
+import ContactSelector from './ContactSelector';
 
 interface ShareEmailDialogProps {
   box: Box;
@@ -24,7 +25,8 @@ interface ShareEmailDialogProps {
 }
 
 const ShareEmailDialog: React.FC<ShareEmailDialogProps> = ({ box, isOpen, onClose }) => {
-  const [emails, setEmails] = useState('');
+  const [manualEmails, setManualEmails] = useState('');
+  const [selectedContactEmails, setSelectedContactEmails] = useState<string[]>([]);
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,14 +42,17 @@ const ShareEmailDialog: React.FC<ShareEmailDialogProps> = ({ box, isOpen, onClos
     setError(null);
     setSuccess(false);
 
-    if (!emails.trim()) {
-      setError('Please enter at least one email address');
+    const allEmails = [
+      ...selectedContactEmails,
+      ...manualEmails.split(',').map(email => email.trim()).filter(email => email)
+    ];
+
+    if (allEmails.length === 0) {
+      setError('Please select at least one contact or enter an email address');
       return;
     }
 
-    const emailArray = emails.split(',').map(email => email.trim());
-    
-    if (!validateEmails(emails)) {
+    if (manualEmails && !validateEmails(manualEmails)) {
       setError('Please enter valid email addresses');
       return;
     }
@@ -58,7 +63,7 @@ const ShareEmailDialog: React.FC<ShareEmailDialogProps> = ({ box, isOpen, onClos
       const shareBoxViaEmail = httpsCallable(functions, 'shareBoxViaEmail');
       await shareBoxViaEmail({
         boxId: box.id,
-        recipientEmails: emailArray,
+        recipientEmails: allEmails,
         message: message.trim(),
         origin: window.location.origin
       });
@@ -66,7 +71,8 @@ const ShareEmailDialog: React.FC<ShareEmailDialogProps> = ({ box, isOpen, onClos
       setSuccess(true);
       setTimeout(() => {
         onClose();
-        setEmails('');
+        setManualEmails('');
+        setSelectedContactEmails([]);
         setMessage('');
         setSuccess(false);
       }, 2000);
@@ -83,11 +89,25 @@ const ShareEmailDialog: React.FC<ShareEmailDialogProps> = ({ box, isOpen, onClos
         <DialogHeader>
           <DialogTitle>Share {box.name} via Email</DialogTitle>
           <DialogDescription>
-            Send this digital label to one or more email addresses
+            Select contacts or enter email addresses manually
           </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">
+          <ContactSelector
+            selectedEmails={selectedContactEmails}
+            onEmailsChange={setSelectedContactEmails}
+          />
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">Or enter emails manually</span>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="emails">
               Email Addresses (separate multiple emails with commas)
@@ -95,8 +115,8 @@ const ShareEmailDialog: React.FC<ShareEmailDialogProps> = ({ box, isOpen, onClos
             <Input
               id="emails"
               placeholder="email@example.com, another@example.com"
-              value={emails}
-              onChange={(e) => setEmails(e.target.value)}
+              value={manualEmails}
+              onChange={(e) => setManualEmails(e.target.value)}
               disabled={isSending}
             />
           </div>

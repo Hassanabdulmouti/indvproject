@@ -9,21 +9,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  BoxIcon,
-  Trash2,
-  QrCode,
-  Download,
-  Lock,
-  Unlock,
-  Share2,
-  Eye,
-  EyeOff,
-  Mail,
-  Link as LinkIcon,
-  Loader2
-} from 'lucide-react';
-import { Badge } from "@/components/ui/badge";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -35,7 +20,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Box } from '@/firebase/dbOp';
+import { Badge } from "@/components/ui/badge";
+import {
+  BoxIcon,
+  Trash2,
+  QrCode,
+  Download,
+  Lock,
+  Unlock,
+  Share2,
+  Eye,
+  EyeOff,
+  Mail,
+  Link as LinkIcon,
+  Loader2,
+  Plus,
+  Check,
+  X
+} from 'lucide-react';
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Box, Contact, createContact, getUserContacts, deleteContact } from '@/firebase/dbOp';
 import { functions } from '@/firebase/clientApp';
 import { httpsCallable } from 'firebase/functions';
 
@@ -52,32 +56,57 @@ const BoxCard: React.FC<BoxCardProps> = ({
   onDeleteBox,
   onPrivacyChange
 }) => {
-  // State management
+  // State management for box operations
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isEmailShareDialogOpen, setIsEmailShareDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [showAccessCode, setShowAccessCode] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [emailRecipients, setEmailRecipients] = useState('');
+  
+  // State management for contact and email sharing
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [selectedContactEmails, setSelectedContactEmails] = useState<string[]>([]);
+  const [manualEmails, setManualEmails] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailSuccess, setEmailSuccess] = useState(false);
+  
+  // State management for new contact creation
+  const [isAddingContact, setIsAddingContact] = useState(false);
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [contactError, setContactError] = useState<string | null>(null);
+
   const qrCodeRef = useRef<HTMLDivElement>(null);
 
-  // Load QR code on mount
+  // Load QR code and contacts on mount
   useEffect(() => {
     if (qrCodeRef.current && box.qrCodeUrl) {
       qrCodeRef.current.innerHTML = box.qrCodeUrl;
     }
+    loadContacts();
   }, [box.qrCodeUrl]);
 
   // Helper functions
+  const loadContacts = async () => {
+    try {
+      const userContacts = await getUserContacts();
+      setContacts(userContacts);
+    } catch (error) {
+      console.error('Error loading contacts:', error);
+    }
+  };
+
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const validateEmails = (emailString: string): boolean => {
     const emailArray = emailString.split(',').map(email => email.trim());
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailArray.every(email => emailRegex.test(email));
+    return emailArray.every(email => validateEmail(email));
   };
 
   // Event handlers
@@ -123,16 +152,46 @@ const BoxCard: React.FC<BoxCardProps> = ({
     }
   };
 
+  const handleAddContact = async () => {
+    setContactError(null);
+    
+    if (!newContactName.trim() || !newContactEmail.trim()) {
+      setContactError('Please fill in all fields');
+      return;
+    }
+
+    if (!validateEmail(newContactEmail)) {
+      setContactError('Please enter a valid email address');
+      return;
+    }
+
+    try {
+      await createContact(newContactName.trim(), newContactEmail.trim());
+      await loadContacts();
+      setIsAddingContact(false);
+      setNewContactName('');
+      setNewContactEmail('');
+    } catch (error) {
+      setContactError('Error creating contact');
+      console.error('Error creating contact:', error);
+    }
+  };
+
   const handleEmailShare = async () => {
     setEmailError(null);
     setEmailSuccess(false);
 
-    if (!emailRecipients.trim()) {
-      setEmailError('Please enter at least one email address');
+    const allEmails = [
+      ...selectedContactEmails,
+      ...manualEmails.split(',').map(email => email.trim()).filter(email => email)
+    ];
+
+    if (allEmails.length === 0) {
+      setEmailError('Please select at least one contact or enter an email address');
       return;
     }
 
-    if (!validateEmails(emailRecipients)) {
+    if (manualEmails && !validateEmails(manualEmails)) {
       setEmailError('Please enter valid email addresses');
       return;
     }
@@ -143,7 +202,7 @@ const BoxCard: React.FC<BoxCardProps> = ({
       const shareBoxViaEmail = httpsCallable(functions, 'shareBoxViaEmail');
       await shareBoxViaEmail({
         boxId: box.id,
-        recipientEmails: emailRecipients.split(',').map(email => email.trim()),
+        recipientEmails: allEmails,
         message: emailMessage.trim(),
         origin: window.location.origin
       });
@@ -151,7 +210,8 @@ const BoxCard: React.FC<BoxCardProps> = ({
       setEmailSuccess(true);
       setTimeout(() => {
         setIsEmailShareDialogOpen(false);
-        setEmailRecipients('');
+        setManualEmails('');
+        setSelectedContactEmails([]);
         setEmailMessage('');
         setEmailSuccess(false);
       }, 2000);
@@ -172,50 +232,241 @@ const BoxCard: React.FC<BoxCardProps> = ({
     }
   };
 
-  // Render functions
-  const renderShareOptions = () => (
-    <div className="space-y-4">
-      <Button
-        className="w-full"
-        variant="outline"
-        onClick={() => {
-          setIsShareDialogOpen(false);
-          setIsEmailShareDialogOpen(true);
-        }}
-      >
-        <Mail className="mr-2 h-4 w-4" />
-        Share via Email
-      </Button>
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">Or copy link</span>
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label>Share Link</Label>
-        <div className="flex space-x-2">
-          <Input
-            readOnly
-            value={`${window.location.origin}/box/${box.id}`}
-            className="flex-1"
-          />
+  // Render helper functions
+  const renderShareDialog = () => (
+    <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Share {box.name}</DialogTitle>
+          <DialogDescription>
+            Choose how you'd like to share this digital label
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4">
           <Button
+            className="w-full"
             variant="outline"
-            onClick={handleCopyLink}
+            onClick={() => {
+              setIsShareDialogOpen(false);
+              setIsEmailShareDialogOpen(true);
+            }}
           >
-            {copied ? 'Copied!' : <LinkIcon className="h-4 w-4" />}
+            <Mail className="mr-2 h-4 w-4" />
+            Share via Email
           </Button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">Or copy link</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Share Link</Label>
+            <div className="flex space-x-2">
+              <Input
+                readOnly
+                value={`${window.location.origin}/box/${box.id}`}
+                className="flex-1"
+              />
+              <Button variant="outline" onClick={handleCopyLink}>
+                {copied ? 'Copied!' : <LinkIcon className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+
+        {box.isPrivate && (
+          <Alert>
+            <AlertDescription>
+              This box is private. Only people with the access code can view its contents.
+            </AlertDescription>
+          </Alert>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+
+  const renderEmailShareDialog = () => (
+    <Dialog open={isEmailShareDialogOpen} onOpenChange={setIsEmailShareDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Share {box.name} via Email</DialogTitle>
+          <DialogDescription>
+            Select contacts or enter email addresses manually
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <Label>Contacts</Label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddingContact(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Contact
+              </Button>
+            </div>
+
+            <ScrollArea className="h-[200px] border rounded-md p-2">
+              {contacts.map((contact) => (
+                <div
+                  key={contact.id}
+                  className="flex items-center justify-between p-2 hover:bg-accent rounded-md cursor-pointer"
+                  onClick={() => {
+                    setSelectedContactEmails(prev =>
+                      prev.includes(contact.email)
+                        ? prev.filter(email => email !== contact.email)
+                        : [...prev, contact.email]
+                    );
+                  }}
+                >
+                  <div>
+                    <div className="font-medium">{contact.name}</div>
+                    <div className="text-sm text-muted-foreground">{contact.email}</div>
+                  </div>
+                  {selectedContactEmails.includes(contact.email) && (
+                    <Check className="h-4 w-4 text-primary" />
+                  )}
+                </div>
+              ))}
+            </ScrollArea>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">Or enter emails manually</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="emails">
+              Email Addresses (separate multiple emails with commas)
+            </Label>
+            <Input
+              id="emails"
+              placeholder="email@example.com, another@example.com"
+              value={manualEmails}
+              onChange={(e) => setManualEmails(e.target.value)}
+              disabled={isSendingEmail}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="message">Add a message (optional)</Label>
+            <Textarea
+              id="message"
+              placeholder="Enter your message here..."
+              value={emailMessage}
+              onChange={(e) => setEmailMessage(e.target.value)}
+              disabled={isSendingEmail}
+            />
+          </div>
+
+          {emailError && (
+            <Alert variant="destructive">
+              <AlertDescription>{emailError}</AlertDescription>
+            </Alert>
+          )}
+
+          {emailSuccess && (
+            <Alert>
+              <AlertDescription>Digital label shared successfully!</AlertDescription>
+            </Alert>
+          )}
+
+          {box.isPrivate && (
+            <Alert>
+              <AlertDescription>
+                Recipients will receive the access code in their email.
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsEmailShareDialogOpen(false)} disabled={isSendingEmail}>
+            Cancel
+          </Button>
+          <Button onClick={handleEmailShare} disabled={isSendingEmail}>
+            {isSendingEmail ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              'Share'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  const renderAddContactDialog = () => (
+    <Dialog open={isAddingContact} onOpenChange={setIsAddingContact}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add New Contact</DialogTitle>
+          <DialogDescription>
+            Add a new contact to your address book
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              value={newContactName}
+              onChange={(e) => setNewContactName(e.target.value)}
+              placeholder="Contact name"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={newContactEmail}
+              onChange={(e) => setNewContactEmail(e.target.value)}
+              placeholder="contact@example.com"
+            />
+          </div>
+
+          {contactError && (
+            <Alert variant="destructive">
+              <AlertDescription>{contactError}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsAddingContact(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleAddContact}>
+            Add Contact
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 
   return (
     <>
-      <Card className="w-full">
+<Card className="w-full">
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle className="flex-1 truncate mr-2">{box.name}</CardTitle>
@@ -314,110 +565,13 @@ const BoxCard: React.FC<BoxCardProps> = ({
       </Card>
 
       {/* Share Dialog */}
-      <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Share {box.name}</DialogTitle>
-            <DialogDescription>
-              Choose how you'd like to share this digital label
-            </DialogDescription>
-          </DialogHeader>
-          
-          {renderShareOptions()}
-
-          {box.isPrivate && (
-            <Alert>
-              <AlertDescription>
-                This box is private. Only people with the access code can view its contents.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsShareDialogOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {renderShareDialog()}
 
       {/* Email Share Dialog */}
-      <Dialog open={isEmailShareDialogOpen} onOpenChange={setIsEmailShareDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Share {box.name} via Email</DialogTitle>
-            <DialogDescription>
-              Send this digital label to one or more email addresses
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="emails">
-                Email Addresses (separate multiple emails with commas)
-              </Label>
-              <Input
-                id="emails"
-                placeholder="email@example.com, another@example.com"
-                value={emailRecipients}
-                onChange={(e) => setEmailRecipients(e.target.value)}
-                disabled={isSendingEmail}
-              />
-            </div>
+      {renderEmailShareDialog()}
 
-            <div className="space-y-2">
-              <Label htmlFor="message">Add a message (optional)</Label>
-              <Textarea
-                id="message"
-                placeholder="Enter your message here..."
-                value={emailMessage}
-                onChange={(e) => setEmailMessage(e.target.value)}
-                disabled={isSendingEmail}
-              />
-            </div>
-
-            {emailError && (
-              <Alert variant="destructive">
-                <AlertDescription>{emailError}</AlertDescription>
-              </Alert>
-            )}
-
-            {emailSuccess && (
-              <Alert>
-                <AlertDescription>Digital label shared successfully!</AlertDescription>
-              </Alert>
-            )}
-
-            {box.isPrivate && (
-              <Alert>
-                <AlertDescription>
-                  Recipients will receive the access code in their email.
-                </AlertDescription>
-              </Alert>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsEmailShareDialogOpen(false)}
-              disabled={isSendingEmail}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleEmailShare} disabled={isSendingEmail}>
-              {isSendingEmail ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                'Share'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Add Contact Dialog */}
+      {renderAddContactDialog()}
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

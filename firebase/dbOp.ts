@@ -15,6 +15,14 @@ export interface User {
   updatedAt: Date;
 }
 
+export interface Contact {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export interface Box {
   id: string;
@@ -269,3 +277,59 @@ export const isCurrentUserAdmin = async (): Promise<boolean> => {
   return userDetails.isAdmin === true;
 };
 
+
+export const createContact = async (name: string, email: string): Promise<string> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('User not authenticated');
+  
+  const contactsRef = collection(db, 'contacts');
+  const newContact = await addDoc(contactsRef, {
+    userId: user.uid,
+    name,
+    email,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+  
+  return newContact.id;
+};
+
+export const getUserContacts = async (): Promise<Contact[]> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('User not authenticated');
+
+  const contactsRef = collection(db, 'contacts');
+  const q = query(contactsRef, where('userId', '==', user.uid));
+  const querySnapshot = await getDocs(q);
+  
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...(doc.data() as Omit<Contact, 'id'>),
+    createdAt: doc.data().createdAt.toDate(),
+    updatedAt: doc.data().updatedAt.toDate()
+  }));
+};
+
+export const deleteContact = async (contactId: string): Promise<void> => {
+  const contactRef = doc(db, 'contacts', contactId);
+  await deleteDoc(contactRef);
+};
+
+
+export interface StorageUsage {
+  totalBytes: number;
+  designsBytes: number;
+  boxesBytes: number;
+}
+
+export const getUserStorageUsage = async (uid: string): Promise<StorageUsage> => {
+  const getStorageUsage = httpsCallable(functions, 'getUserStorageUsage');
+  const result = await getStorageUsage({ targetUid: uid });
+  return result.data as StorageUsage;
+};
+
+
+export const updateUserLastActivity = async () => {
+  const updateLastActivityFunction = httpsCallable(functions, 'updateUserLastActivity');
+  await updateLastActivityFunction();
+};
