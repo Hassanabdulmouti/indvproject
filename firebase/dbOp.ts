@@ -43,6 +43,68 @@ export interface BoxContent {
   updatedAt: Date;
 }
 
+export interface InsuranceItem {
+  id: string;
+  name: string;
+  value: number;
+  currency: string;
+  imageUrl?: string;
+  description?: string;
+}
+
+export interface InsuranceCompany {
+  id: string;
+  name: string;
+  logoUrl: string;
+}
+
+export interface InsuranceLabel extends Box {
+  type: 'insurance';
+  insuranceCompany?: InsuranceCompany;
+  items: InsuranceItem[];
+  totalValue: number;
+  currency: string;
+}
+
+
+export const createInsuranceLabel = async (
+  name: string,
+  description: string,
+  designSvg: string,
+  insuranceCompany: InsuranceCompany,
+  items: InsuranceItem[],
+  currency: string,
+  isPrivate: boolean,
+  accessCode?: string
+): Promise<string> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('User not authenticated');
+  
+  const totalValue = items.reduce((sum, item) => sum + item.value, 0);
+  
+  const boxesRef = collection(db, 'boxes');
+  const newBox = await addDoc(boxesRef, {
+    userId: user.uid,
+    type: 'insurance',
+    name,
+    description,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    isPrivate,
+    insuranceCompany,
+    items,
+    totalValue,
+    currency,
+    ...(isPrivate && accessCode && { accessCode })
+  });
+  
+  const qrCodeUrl = await uploadDesign(user.uid, newBox.id, designSvg);
+  await updateDoc(doc(db, 'boxes', newBox.id), { qrCodeUrl });
+  
+  return newBox.id;
+};
+
+
 export const uploadDesign = async (userId: string, boxId: string, designSvg: string): Promise<string> => {
   const designRef = ref(storage, `designs/${userId}/${boxId}.svg`);
   await uploadString(designRef, designSvg, 'data_url');
@@ -201,17 +263,28 @@ export const uploadFile = async (file: File, path: string): Promise<string> => {
   return await getDownloadURL(snapshot.ref);
 };
 
-export const getUserBoxes = async (userId: string): Promise<Box[]> => {
+export const getUserBoxes = async (userId: string): Promise<(Box | InsuranceLabel)[]> => {
   const boxesRef = collection(db, 'boxes');
   const q = query(boxesRef, where('userId', '==', userId));
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...(doc.data() as Omit<Box, 'id'>),
-    createdAt: doc.data().createdAt.toDate(),
-    updatedAt: doc.data().updatedAt.toDate()
-  }));
+  
+  return querySnapshot.docs.map(doc => {
+    const data = doc.data();
+    const base = {
+      id: doc.id,
+      ...data,
+      createdAt: data.createdAt.toDate(),
+      updatedAt: data.updatedAt.toDate()
+    };
+    
+    if (data.type === 'insurance') {
+      return base as InsuranceLabel;
+    }
+    
+    return base as Box;
+  });
 };
+
 
 export const deleteBoxContent = async (contentId: string) => {
   const contentRef = doc(db, 'contents', contentId);

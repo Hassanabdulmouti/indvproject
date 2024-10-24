@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { PlusCircle, Eye, EyeOff } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 import QRCode from 'qrcode';
-import { createBox } from '@/firebase/dbOp';
+import { createBox, Box } from '@/firebase/dbOp';
 
 interface PackagingSymbol {
   name: string;
@@ -150,7 +150,12 @@ const designs: Design[] = [
   },
 ];
 
-const CreateBoxForm: React.FC = () => {
+interface CreateBoxFormProps {
+  onBoxCreated: (newBox: Box) => void;
+}
+
+
+const CreateBoxForm: React.FC<CreateBoxFormProps> = ({ onBoxCreated }) => {
   const [newBoxName, setNewBoxName] = useState<string>('');
   const [newBoxDescription, setNewBoxDescription] = useState<string>('');
   const [qrCodeData, setQRCodeData] = useState<string>('');
@@ -216,21 +221,37 @@ const CreateBoxForm: React.FC = () => {
       setIsLoading(true);
       try {
         const pngDataUrl = canvasRef.current.toDataURL('image/png');
-        await createBox(newBoxName, newBoxDescription, pngDataUrl, isPrivate, isPrivate ? accessCode : undefined);
+        const boxId = await createBox(
+          newBoxName, 
+          newBoxDescription, 
+          pngDataUrl, 
+          isPrivate, 
+          isPrivate ? accessCode : undefined
+        );
+        
+        // Create a new box object to pass to the callback
+        const newBox: Box = {
+          id: boxId,
+          name: newBoxName,
+          description: newBoxDescription,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          qrCodeUrl: pngDataUrl,
+          isPrivate,
+          ...(isPrivate && { accessCode })
+        };
+        
+        onBoxCreated(newBox);
         
         // Reset form
         setNewBoxName('');
         setNewBoxDescription('');
         setQRCodeData('');
-        setSelectedSymbols([]);
         setIsPrivate(false);
         setAccessCode('');
         
-        // You might want to show a success message or redirect the user here
-        console.log('Box created successfully!');
       } catch (error) {
         console.error('Error creating box:', error);
-        // You might want to show an error message to the user here
       } finally {
         setIsLoading(false);
       }
