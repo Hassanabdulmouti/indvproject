@@ -24,6 +24,22 @@ export interface Contact {
   updatedAt: Date;
 }
 
+export interface InsuranceItem {
+  id: string;
+  name: string;
+  value: number;
+  currency?: string;
+  imageUrl?: string;
+  description?: string;
+}
+
+export interface InsuranceCompany {
+  id: string;
+  name: string;
+  logoUrl: string;
+  primaryColor: string;
+}
+
 export interface Box {
   id: string;
   name: string;
@@ -34,6 +50,18 @@ export interface Box {
   isPrivate: boolean;
   accessCode?: string;
 }
+
+export interface InsuranceLabel extends Box {
+  type: 'insurance';
+  insuranceCompany: InsuranceCompany;
+  items: InsuranceItem[];
+  totalValue: number;
+  currency: string;
+}
+
+export const isInsuranceLabel = (item: Box | InsuranceLabel): item is InsuranceLabel => {
+  return 'type' in item && item.type === 'insurance';
+};
 
 export interface BoxContent {
   id: string;
@@ -47,7 +75,7 @@ export interface InsuranceItem {
   id: string;
   name: string;
   value: number;
-  currency: string;
+  currency?: string;
   imageUrl?: string;
   description?: string;
 }
@@ -56,15 +84,9 @@ export interface InsuranceCompany {
   id: string;
   name: string;
   logoUrl: string;
+  primaryColor: string;
 }
 
-export interface InsuranceLabel extends Box {
-  type: 'insurance';
-  insuranceCompany?: InsuranceCompany;
-  items: InsuranceItem[];
-  totalValue: number;
-  currency: string;
-}
 
 
 export const createInsuranceLabel = async (
@@ -402,3 +424,54 @@ export const getUserStorageUsage = async (uid: string): Promise<StorageUsage> =>
 };
 
 
+// Function to get a specific insurance label
+export const getInsuranceLabel = async (labelId: string): Promise<InsuranceLabel> => {
+  const labelRef = doc(db, 'boxes', labelId);
+  const labelSnap = await getDoc(labelRef);
+  
+  if (labelSnap.exists()) {
+    const data = labelSnap.data() as Omit<InsuranceLabel, 'id'>;
+    return {
+      id: labelId,
+      ...data,
+      createdAt: data.createdAt instanceof Date ? data.createdAt : (data.createdAt as any).toDate(),
+      updatedAt: data.updatedAt instanceof Date ? data.updatedAt : (data.updatedAt as any).toDate()
+    };
+  } else {
+    throw new Error('Insurance label not found');
+  }
+};
+
+// Function to update an insurance label's items
+export const updateInsuranceItems = async (
+  labelId: string, 
+  items: InsuranceItem[]
+): Promise<void> => {
+  const labelRef = doc(db, 'boxes', labelId);
+  const totalValue = items.reduce((sum, item) => sum + item.value, 0);
+  
+  await updateDoc(labelRef, {
+    items,
+    totalValue,
+    updatedAt: new Date()
+  });
+};
+
+// Function to get all insurance labels for a user
+export const getUserInsuranceLabels = async (userId: string): Promise<InsuranceLabel[]> => {
+  const boxesRef = collection(db, 'boxes');
+  const q = query(
+    boxesRef, 
+    where('userId', '==', userId),
+    where('type', '==', 'insurance')
+  );
+  
+  const querySnapshot = await getDocs(q);
+  
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...(doc.data() as Omit<InsuranceLabel, 'id'>),
+    createdAt: doc.data().createdAt.toDate(),
+    updatedAt: doc.data().updatedAt.toDate()
+  }));
+};

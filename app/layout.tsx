@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/firebase/clientApp'
 
+
 const inter = Inter({ subsets: ['latin'] })
 
 const updateUserLastActivity = async () => {

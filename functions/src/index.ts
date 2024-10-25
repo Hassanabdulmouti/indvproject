@@ -113,6 +113,102 @@ const transporter = nodemailer.createTransport({
   });
   
 
+  export const shareLabelViaEmail = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated to share boxes');
+    }
+  
+    const { labelId, recipientEmails, message } = data;
+  
+    try {
+      // Get box details
+      const boxSnapshot = await admin.firestore().collection('boxes').doc(labelId).get();
+      const boxData = boxSnapshot.data();
+  
+      if (!boxData) {
+        throw new functions.https.HttpsError('not-found', 'Box not found');
+      }
+  
+      // Get sender's user details
+      const senderSnapshot = await admin.firestore().collection('users').doc(context.auth.uid).get();
+      const senderData = senderSnapshot.data();
+  
+      if (!senderData) {
+        throw new functions.https.HttpsError('not-found', 'Sender data not found');
+      }
+  
+      // Verify sender has access to share the box
+      if (boxData.userId !== context.auth.uid && !senderData.isAdmin && boxData.isPrivate) {
+        throw new functions.https.HttpsError('permission-denied', 'You do not have permission to share this box');
+      }
+  
+      const shareUrl = `${data.origin}/label/${labelId}`;
+      const accessCodeInfo = boxData.isPrivate ? `\nAccess Code: ${boxData.accessCode}` : '';
+  
+      const mailOptions = {
+        from: `"${senderData.displayName} via YourApp" <${functions.config().gmail.email}>`,
+        to: recipientEmails.join(', '),
+        subject: `${senderData.displayName} shared a digital label with you: ${boxData.name}`,
+        text: `
+          ${senderData.displayName} has shared a digital label with you: ${boxData.name}
+          
+          ${message ? `Message: ${message}\n` : ''}
+          
+          View the digital label here: ${shareUrl}
+          ${accessCodeInfo}
+          
+          Description: ${boxData.description}
+        `,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>${senderData.displayName} has shared a digital label with you</h2>
+            
+            ${message ? `<p><strong>Message:</strong> ${message}</p>` : ''}
+            
+            <div style="margin: 20px 0; padding: 20px; background-color: #f5f5f5; border-radius: 8px;">
+              <h3 style="margin: 0 0 10px 0;">${boxData.name}</h3>
+              <p style="margin: 0;">${boxData.description}</p>
+            </div>
+            
+            <p>
+              <a href="${shareUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">
+                View Digital Label
+              </a>
+            </p>
+            
+            ${boxData.isPrivate ? `
+              <p style="margin-top: 20px; padding: 10px; background-color: #fff3cd; border-radius: 4px;">
+                <strong>Access Code:</strong> ${boxData.accessCode}
+              </p>
+            ` : ''}
+            
+            <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;" />
+            
+            <p style="color: #666; font-size: 12px;">
+              This is an automated message from Moveout project. Please do not reply to this email.
+            </p>
+          </div>
+        `
+      };
+  
+      await transporter.sendMail(mailOptions);
+  
+      // Log the share action
+      await admin.firestore().collection('shareHistory').add({
+        labelId,
+        sharedBy: context.auth.uid,
+        sharedWith: recipientEmails,
+        sharedAt: admin.firestore.FieldValue.serverTimestamp(),
+        message: message || null
+      });
+  
+      return { success: true };
+    } catch (error) {
+      console.error('Error sharing box via email:', error);
+      throw new functions.https.HttpsError('internal', 'Error sharing box via email');
+    }
+  });
+  
 
 export const sendDeactivationEmail = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
