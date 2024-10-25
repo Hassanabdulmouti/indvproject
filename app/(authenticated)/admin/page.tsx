@@ -215,8 +215,7 @@ export default function AdminDashboard() {
                             </span>
                           </div>
                           <div className="text-sm text-gray-500 pl-6">
-                            <div>Designs: {formatBytes(user.storage.designsBytes)}</div>
-                            <div>Boxes: {formatBytes(user.storage.boxesBytes)}</div>
+                            <div>Data usage: {formatBytes(user.storage.designsBytes)}</div>
                           </div>
                         </div>
                       ) : (
