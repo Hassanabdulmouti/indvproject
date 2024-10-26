@@ -1,8 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MoveOut Application
+
+A modern Next.js web application designed to help users organize and label moving boxes with QR codes, built with Next.js and Firebase.
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js (latest LTS version)
+- npm, yarn, pnpm, or bun
+- Firebase CLI
+```bash
+npm install -g firebase-tools
+```
+
+### Installation
+
+1. Clone the repository
+```bash
+git clone [repository-url]
+cd indvproj
+```
+
+2. Install dependencies
+```bash
+npm install
+# or
+yarn install
+# or
+pnpm install
+# or
+bun install
+```
+
+3. Set up environment variables by creating a `.env.local` file:
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-domain
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-bucket
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
+```
+
+### Development Server
+
+Run the development server:
 
 ```bash
 npm run dev
@@ -16,21 +58,68 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Development
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Pages can be edited by modifying files in the `app` directory
+- The application will auto-update as you save files
+- This project uses `next/font` to automatically optimize and load Geist, a custom font family
+
+## Tech Stack
+
+- **Framework**: Next.js 14+ with TypeScript
+- **Styling**: Tailwind CSS
+- **UI Components**: shadcn/ui
+- **Database**: Firebase Firestore
+- **Authentication**: Firebase Auth
+- **Storage**: Firebase Storage
+- **Hosting**: Firebase Hosting
+- **Functions**: Firebase Cloud Functions
+
+## Project Structure
+
+```
+indvproj/
+├── app/
+│   ├── (authenticated)/       # Protected routes
+│   │   ├── admin/            # Admin dashboard
+│   │   ├── dashboard/        # Main user dashboard
+│   │   └── profile/          # User profile
+│   ├── auth/                 # Authentication routes
+│   ├── box/                  # Box management
+│   └── label/               # Label management
+├── components/
+│   ├── ui/                  # shadcn/ui components
+│   └── dashboard/           # Dashboard specific components
+├── firebase/                # Firebase configuration
+├── functions/              # Firebase Cloud Functions
+├── hooks/                 # Custom React hooks
+├── lib/                   # Utility functions
+└── public/               # Static assets
+```
+
+## Features
+
+### Core Functionality
+- User authentication with email verification
+- Box management with QR code generation
+- Content recording in multiple formats (text, audio, images)
+- Real-time updates and sharing
+- Insurance label management
 
 ## Learn More
 
-To learn more about Next.js, take a look at the following resources:
+To learn more about the technologies used in this project:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- [Next.js Documentation](https://nextjs.org/docs) - Next.js features and API
+- [Learn Next.js](https://nextjs.org/learn) - Interactive Next.js tutorial
+- [Firebase Documentation](https://firebase.google.com/docs)
+- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Contributing
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
