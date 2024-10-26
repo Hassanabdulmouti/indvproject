@@ -1,43 +1,13 @@
 import React, { useRef, useEffect, useState } from 'react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import {
-  BoxIcon,
-  Trash2,
-  QrCode,
-  Download,
-  Lock,
-  Unlock,
-  Share2,
-  Eye,
-  EyeOff,
-  Mail,
-  Link as LinkIcon,
-  Loader2,
-  Plus,
-  Check,
-  X
-} from 'lucide-react';
+import { BoxIcon, Trash2, QrCode, Download, Lock, Unlock, Share2, Eye, EyeOff, Mail, Link as LinkIcon, Loader2, Plus, Check, X } from 'lucide-react';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Box, Contact, createContact, getUserContacts, deleteContact } from '@/firebase/dbOp';
 import { functions } from '@/firebase/clientApp';
@@ -56,7 +26,7 @@ const BoxCard: React.FC<BoxCardProps> = ({
   onDeleteBox,
   onPrivacyChange
 }) => {
-  // State management for box operations
+
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isEmailShareDialogOpen, setIsEmailShareDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -64,7 +34,6 @@ const BoxCard: React.FC<BoxCardProps> = ({
   const [copied, setCopied] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
-  // State management for contact and email sharing
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedContactEmails, setSelectedContactEmails] = useState<string[]>([]);
   const [manualEmails, setManualEmails] = useState('');
@@ -73,7 +42,6 @@ const BoxCard: React.FC<BoxCardProps> = ({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailSuccess, setEmailSuccess] = useState(false);
   
-  // State management for new contact creation
   const [isAddingContact, setIsAddingContact] = useState(false);
   const [newContactName, setNewContactName] = useState('');
   const [newContactEmail, setNewContactEmail] = useState('');
@@ -81,7 +49,6 @@ const BoxCard: React.FC<BoxCardProps> = ({
 
   const qrCodeRef = useRef<HTMLDivElement>(null);
 
-  // Load QR code and contacts on mount
   useEffect(() => {
     if (qrCodeRef.current && box.qrCodeUrl) {
       qrCodeRef.current.innerHTML = box.qrCodeUrl;
@@ -89,7 +56,6 @@ const BoxCard: React.FC<BoxCardProps> = ({
     loadContacts();
   }, [box.qrCodeUrl]);
 
-  // Helper functions
   const loadContacts = async () => {
     try {
       const userContacts = await getUserContacts();
@@ -109,7 +75,6 @@ const BoxCard: React.FC<BoxCardProps> = ({
     return emailArray.every(email => validateEmail(email));
   };
 
-  // Event handlers
   const handleDownloadDesign = async () => {
     if (box.qrCodeUrl) {
       try {
@@ -232,7 +197,6 @@ const BoxCard: React.FC<BoxCardProps> = ({
     }
   };
 
-  // Render helper functions
   const renderShareDialog = () => (
     <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
       <DialogContent className="sm:max-w-md">

@@ -121,7 +121,6 @@ const transporter = nodemailer.createTransport({
     const { labelId, recipientEmails, message } = data;
   
     try {
-      // Get box details
       const boxSnapshot = await admin.firestore().collection('boxes').doc(labelId).get();
       const boxData = boxSnapshot.data();
   
@@ -129,7 +128,6 @@ const transporter = nodemailer.createTransport({
         throw new functions.https.HttpsError('not-found', 'Box not found');
       }
   
-      // Get sender's user details
       const senderSnapshot = await admin.firestore().collection('users').doc(context.auth.uid).get();
       const senderData = senderSnapshot.data();
   
@@ -137,7 +135,6 @@ const transporter = nodemailer.createTransport({
         throw new functions.https.HttpsError('not-found', 'Sender data not found');
       }
   
-      // Verify sender has access to share the box
       if (boxData.userId !== context.auth.uid && !senderData.isAdmin && boxData.isPrivate) {
         throw new functions.https.HttpsError('permission-denied', 'You do not have permission to share this box');
       }
@@ -193,7 +190,6 @@ const transporter = nodemailer.createTransport({
   
       await transporter.sendMail(mailOptions);
   
-      // Log the share action
       await admin.firestore().collection('shareHistory').add({
         labelId,
         sharedBy: context.auth.uid,
@@ -307,10 +303,8 @@ export const deleteUserAccount = functions.https.onCall(async (data, context) =>
       throw new functions.https.HttpsError('permission-denied', 'User must be an admin or the account owner to perform this action.');
     }
 
-    // Delete user data from Firestore
     await admin.firestore().collection('users').doc(targetUid).delete();
     
-    // Delete user authentication
     await admin.auth().deleteUser(targetUid);
 
     return { success: true };
@@ -362,7 +356,6 @@ export const getUserStorageUsage = functions.https.onCall(async (data, context) 
   const { targetUid } = data;
 
   try {
-    // Verify admin status
     const callerSnapshot = await admin.firestore().collection('users').doc(callerUid).get();
     const callerData = callerSnapshot.data();
 
@@ -374,17 +367,14 @@ export const getUserStorageUsage = functions.https.onCall(async (data, context) 
       throw new functions.https.HttpsError('invalid-argument', 'Target user ID is required');
     }
 
-    // Get all files in designs directory
     const [designFiles] = await admin.storage().bucket().getFiles({
       prefix: `designs/${targetUid}`
     });
 
-    // Get all files in boxes directory
     const [boxFiles] = await admin.storage().bucket().getFiles({
       prefix: `boxes/${targetUid}`
     });
 
-    // Calculate total sizes
     const designsSize = designFiles.reduce((acc, file) => {
       const size = parseInt(String(file.metadata.size) || '0');
       return acc + size;
@@ -441,15 +431,14 @@ export const updateUserLastActivity = functions.https.onCall(async (data, contex
 });
 
 export const checkInactiveUsers = functions.pubsub
-  .schedule('*/1 * * * *')  // Runs every minute using cron syntax
-  .timeZone('UTC')          // Specify the timezone
+  .schedule('*/1 * * * *') 
+  .timeZone('UTC')          
   .onRun(async (context) => {
     console.log('Starting inactive users check...');
     
     try {
       const now = Date.now();
       
-      // Calculate threshold timestamps
       const inactivityThreshold = new Date(now - FIVE_MINUTES_MS);
       const reminderThreshold = new Date(now - (FIVE_MINUTES_MS - TWO_MINUTES_MS));
 
@@ -471,7 +460,6 @@ export const checkInactiveUsers = functions.pubsub
       const emailPromises: Promise<any>[] = [];
       let hasUpdates = false;
 
-      // Process each user
       for (const userDoc of usersSnapshot.docs) {
         const userData = userDoc.data() as UserData;
         const lastActivity = userData.lastActivity?.toDate() || userData.createdAt.toDate();
@@ -482,7 +470,6 @@ export const checkInactiveUsers = functions.pubsub
           minutesInactive: timeSinceLastActivity / 1000 / 60
         });
 
-        // Check for deactivation (over 5 minutes inactive)
         if (lastActivity < inactivityThreshold) {
           console.log(`Deactivating user ${userData.email}`);
           
@@ -502,7 +489,7 @@ export const checkInactiveUsers = functions.pubsub
               })
           );
         }
-        // Check for reminder (3 minutes inactive)
+
         else if (
           lastActivity < reminderThreshold &&
           (!userData.lastReminderSent || userData.lastReminderSent.toDate() < reminderThreshold)
@@ -530,7 +517,6 @@ export const checkInactiveUsers = functions.pubsub
         }
       }
 
-      // Commit batch if there are updates
       if (hasUpdates) {
         try {
           await batch.commit();

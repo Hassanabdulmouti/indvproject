@@ -1,11 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,23 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  PlusCircle,
-  Upload,
-  Trash2,
-  Eye,
-  EyeOff,
-  Loader2,
-  Receipt,
-  AlertCircle,
-} from 'lucide-react';
+import { PlusCircle,  Upload,  Trash2, Eye, EyeOff, Loader2, Receipt, AlertCircle, } from 'lucide-react';
 import QRCode from 'qrcode';
-import {
-  createInsuranceLabel,
-  uploadFile,
-  InsuranceLabel,
-  InsuranceItem,
-} from '@/firebase/dbOp';
+import { createInsuranceLabel, uploadFile, InsuranceLabel, InsuranceItem, } from '@/firebase/dbOp';
 import { insuranceCompanies, currencies, formatCurrency } from '@/lib/config/insurance';
 
 interface InsuranceLabelFormProps {
@@ -38,7 +18,7 @@ interface InsuranceLabelFormProps {
 }
 
 const InsuranceLabelForm: React.FC<InsuranceLabelFormProps> = ({ onLabelCreated }) => {
-  // Form state
+
   const [formError, setFormError] = useState<string | null>(null);
   const [labelName, setLabelName] = useState('');
   const [labelDescription, setLabelDescription] = useState('');
@@ -52,11 +32,9 @@ const InsuranceLabelForm: React.FC<InsuranceLabelFormProps> = ({ onLabelCreated 
   const [previewLoaded, setPreviewLoaded] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
-  // Insurance-specific state
   const [selectedCompany, setSelectedCompany] = useState<typeof insuranceCompanies[0] | null>(null);
   const [items, setItems] = useState<InsuranceItem[]>([]);
   
-  // New item form state
   const [newItem, setNewItem] = useState({
     name: '',
     value: '',
@@ -66,7 +44,6 @@ const InsuranceLabelForm: React.FC<InsuranceLabelFormProps> = ({ onLabelCreated 
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-// Add this useEffect at the top of your component
 useEffect(() => {
   if (canvasRef.current) {
     const ctx = canvasRef.current.getContext('2d');
@@ -77,7 +54,6 @@ useEffect(() => {
   }
 }, []);
 
-  // Effect for QR code generation
   useEffect(() => {
     generateQRCode();
   }, [labelName]);
@@ -88,7 +64,6 @@ useEffect(() => {
     }
   }, [activeTab, labelName, selectedCompany, items, currency, qrCodeData]);
 
-  // Effect for preview rendering
   useEffect(() => {
     if (activeTab === 'preview' && canvasRef.current) {
       renderDesign();
@@ -108,21 +83,18 @@ useEffect(() => {
     }
   };
 
-  // QR Code generation effect
 useEffect(() => {
   if (labelName) {
     generateQRCode();
   }
 }, [labelName]);
 
-// Design rendering effect
 useEffect(() => {
   if (labelName && selectedCompany) {
     renderDesign();
   }
 }, [qrCodeData, labelName, selectedCompany, items, currency]);
 
-// Initial canvas setup
 useEffect(() => {
   if (canvasRef.current) {
     const ctx = canvasRef.current.getContext('2d');
@@ -147,7 +119,6 @@ useEffect(() => {
       setPreviewLoaded(false);
       setPreviewError(null);
       
-      // Small delay to ensure canvas is mounted
       const timer = setTimeout(() => {
         renderDesign();
       }, 100);
@@ -163,19 +134,15 @@ useEffect(() => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
   
-    // Clear canvas
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   
-    // Company brand color bar
     ctx.fillStyle = selectedCompany.primaryColor;
     ctx.fillRect(0, 0, canvas.width, 40);
   
-    // Draw the logo and QR code
     const drawImages = async () => {
 
   
-      // QR Code
       if (qrCodeData) {
         const qrImage = new Image();
         qrImage.src = qrCodeData;
@@ -186,7 +153,6 @@ useEffect(() => {
         ctx.drawImage(qrImage, 20, 50, 100, 100);
       }
   
-      // Draw label content
       ctx.fillStyle = 'black';
       ctx.font = 'bold 24px Arial';
       ctx.fillText(labelName, 140, 80);
@@ -195,7 +161,6 @@ useEffect(() => {
       const totalValue = items.reduce((sum, item) => sum + parseFloat(item.value.toString()), 0);
       ctx.fillText(`Total Value: ${formatCurrency(totalValue, currency.code)}`, 140, 100);
   
-      // Items list
       let yOffset = 160;
       items.slice(0, 3).forEach((item) => {
         ctx.font = '12px Arial';
@@ -218,7 +183,6 @@ useEffect(() => {
   };
 
   const drawLabelContent = (ctx: CanvasRenderingContext2D) => {
-    // Title and description
     ctx.fillStyle = 'black';
     ctx.font = 'bold 24px Arial';
     ctx.fillText(labelName, 140, 80);
@@ -231,7 +195,6 @@ useEffect(() => {
       100
     );
 
-    // Items list
     let yOffset = 160;
     items.slice(0, 3).forEach((item) => {
       ctx.font = '12px Arial';
@@ -304,7 +267,6 @@ useEffect(() => {
     e.preventDefault();
     setFormError(null);
   
-    // Debug logs
     console.log({
       labelName: labelName.trim(),
       selectedCompany,
@@ -314,7 +276,6 @@ useEffect(() => {
       accessCode
     });
   
-    // Separate validation checks for better error messages
     if (!labelName.trim()) {
       setFormError('Please enter a label name');
       return;

@@ -261,7 +261,7 @@ export const addContentToBox = async (boxId: string, type: 'text' | 'audio' | 'i
   if (typeof content === 'string') {
     value = content;
   } else {
-    // File upload
+
     const storageRef = ref(storage, `boxes/${boxId}/${type}/${content.name}`);
     await uploadBytes(storageRef, content);
     value = await getDownloadURL(storageRef);
@@ -424,7 +424,6 @@ export const getUserStorageUsage = async (uid: string): Promise<StorageUsage> =>
 };
 
 
-// Function to get a specific insurance label
 export const getInsuranceLabel = async (labelId: string): Promise<InsuranceLabel> => {
   const labelRef = doc(db, 'boxes', labelId);
   const labelSnap = await getDoc(labelRef);
@@ -442,7 +441,6 @@ export const getInsuranceLabel = async (labelId: string): Promise<InsuranceLabel
   }
 };
 
-// Function to update an insurance label's items
 export const updateInsuranceItems = async (
   labelId: string, 
   items: InsuranceItem[]
@@ -457,7 +455,6 @@ export const updateInsuranceItems = async (
   });
 };
 
-// Function to get all insurance labels for a user
 export const getUserInsuranceLabels = async (userId: string): Promise<InsuranceLabel[]> => {
   const boxesRef = collection(db, 'boxes');
   const q = query(

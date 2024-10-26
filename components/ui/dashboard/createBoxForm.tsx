@@ -39,11 +39,9 @@ const designs: Design[] = [
     render: (ctx, props) => {
       const { canvas, boxName, boxDescription, qrCodeData, selectedSymbols } = props;
       
-      // Background
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Text
       ctx.fillStyle = 'black';
       ctx.font = 'bold 24px Arial';
       ctx.textAlign = 'center';
@@ -52,12 +50,10 @@ const designs: Design[] = [
       ctx.font = '14px Arial';
       ctx.fillText(boxDescription, canvas.width / 2, 50);
       
-      // QR Code
       const qrImage = new Image();
       qrImage.onload = () => {
         ctx.drawImage(qrImage, 75, 70, 150, 150);
         
-        // Symbols
         selectedSymbols.forEach((symbol, index) => {
           const symbolImage = new Image();
           symbolImage.onload = () => {
@@ -74,16 +70,13 @@ const designs: Design[] = [
     render: (ctx, props) => {
       const { canvas, boxName, boxDescription, qrCodeData, selectedSymbols } = props;
       
-      // Background
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Border
       ctx.strokeStyle = 'black';
       ctx.lineWidth = 2;
       ctx.strokeRect(0, 0, canvas.width, canvas.height);
       
-      // Text
       ctx.fillStyle = 'black';
       ctx.font = 'bold 24px Arial';
       ctx.textAlign = 'center';
@@ -92,12 +85,10 @@ const designs: Design[] = [
       ctx.font = '14px Arial';
       ctx.fillText(boxDescription, canvas.width / 2, 60);
       
-      // QR Code
       const qrImage = new Image();
       qrImage.onload = () => {
         ctx.drawImage(qrImage, 85, 80, 150, 150);
         
-        // Symbols
         selectedSymbols.forEach((symbol, index) => {
           const symbolImage = new Image();
           symbolImage.onload = () => {
@@ -114,14 +105,12 @@ const designs: Design[] = [
     render: (ctx, props) => {
       const { canvas, boxName, boxDescription, qrCodeData, selectedSymbols } = props;
       
-      // Background
       const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
       gradient.addColorStop(0, '#ff9a9e');
       gradient.addColorStop(1, '#fad0c4');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Text
       ctx.fillStyle = '#333';
       ctx.font = 'bold 24px Arial';
       ctx.textAlign = 'center';
@@ -131,12 +120,10 @@ const designs: Design[] = [
       ctx.font = '14px Arial';
       ctx.fillText(boxDescription, canvas.width / 2, 60);
       
-      // QR Code
       const qrImage = new Image();
       qrImage.onload = () => {
         ctx.drawImage(qrImage, 75, 80, 150, 150);
         
-        // Symbols
         selectedSymbols.forEach((symbol, index) => {
           const symbolImage = new Image();
           symbolImage.onload = () => {
@@ -202,10 +189,8 @@ const CreateBoxForm: React.FC<CreateBoxFormProps> = ({ onBoxCreated }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Render the selected design
     selectedDesign.render(ctx, {
       qrCodeData,
       boxName: newBoxName,
@@ -229,7 +214,6 @@ const CreateBoxForm: React.FC<CreateBoxFormProps> = ({ onBoxCreated }) => {
           isPrivate ? accessCode : undefined
         );
         
-        // Create a new box object to pass to the callback
         const newBox: Box = {
           id: boxId,
           name: newBoxName,
@@ -243,7 +227,6 @@ const CreateBoxForm: React.FC<CreateBoxFormProps> = ({ onBoxCreated }) => {
         
         onBoxCreated(newBox);
         
-        // Reset form
         setNewBoxName('');
         setNewBoxDescription('');
         setQRCodeData('');

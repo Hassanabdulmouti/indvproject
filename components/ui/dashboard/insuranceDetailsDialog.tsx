@@ -7,16 +7,9 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  FileEdit, Trash2, Download, Eye, EyeOff, Share2, Loader2
-} from 'lucide-react';
+import { FileEdit, Trash2, Download, Eye, EyeOff, Share2, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { 
-  InsuranceLabel, 
-  InsuranceItem,
-  updateBoxPrivacy, 
-  uploadFile 
-} from '@/firebase/dbOp';
+import { InsuranceLabel, InsuranceItem, updateBoxPrivacy, uploadFile } from '@/firebase/dbOp';
 import { formatCurrency } from '@/utils/currency';
 
 interface InsuranceDetailsDialogProps {
@@ -30,7 +23,7 @@ const InsuranceDetailsDialog: React.FC<InsuranceDetailsDialogProps> = ({
   onClose,
   onLabelUpdated
 }) => {
-  // State management
+
   const [activeTab, setActiveTab] = useState('details');
   const [isPrivate, setIsPrivate] = useState(label.isPrivate);
   const [accessCode, setAccessCode] = useState(label.accessCode || '');

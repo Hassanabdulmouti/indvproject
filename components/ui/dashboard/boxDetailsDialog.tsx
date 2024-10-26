@@ -46,7 +46,6 @@ const BoxDetailsDialog: React.FC<BoxDetailsDialogProps> = ({
       onBoxUpdated(updatedBox);
     } catch (error) {
       console.error('Error updating box privacy:', error);
-      // You might want to show an error message to the user here
     } finally {
       setIsUpdating(false);
     }

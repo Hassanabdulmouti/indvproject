@@ -60,7 +60,6 @@ const InsuranceLabelCard: React.FC<InsuranceLabelCardProps> = ({
   onPrivacyChange,
   onDeleteLabel
 }) => {
-  // State management
   const [showAccessCode, setShowAccessCode] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -69,7 +68,6 @@ const InsuranceLabelCard: React.FC<InsuranceLabelCardProps> = ({
   const [isAddingContact, setIsAddingContact] = useState(false);
   const [copied, setCopied] = useState(false);
   
-  // Email sharing state
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedContactEmails, setSelectedContactEmails] = useState<string[]>([]);
   const [manualEmails, setManualEmails] = useState('');
@@ -78,12 +76,10 @@ const InsuranceLabelCard: React.FC<InsuranceLabelCardProps> = ({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailSuccess, setEmailSuccess] = useState(false);
   
-  // Contact management state
   const [newContactName, setNewContactName] = useState('');
   const [newContactEmail, setNewContactEmail] = useState('');
   const [contactError, setContactError] = useState<string | null>(null);
 
-  // Load contacts
   const loadContacts = async () => {
     try {
       const userContacts = await getUserContacts();
@@ -93,7 +89,6 @@ const InsuranceLabelCard: React.FC<InsuranceLabelCardProps> = ({
     }
   };
 
-  // Validation helpers
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
@@ -104,7 +99,6 @@ const InsuranceLabelCard: React.FC<InsuranceLabelCardProps> = ({
     return emailArray.every(email => validateEmail(email));
   };
 
-  // Event handlers
   const handleDelete = async () => {
     if (!onDeleteLabel) return;
     setIsDeleting(true);
@@ -228,7 +222,6 @@ const InsuranceLabelCard: React.FC<InsuranceLabelCardProps> = ({
     }
   };
 
-  // Render helper functions
   const renderShareDialog = () => (
     <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
       <DialogContent className="sm:max-w-md">
