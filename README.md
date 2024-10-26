@@ -122,4 +122,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+Moveout project is released under [Commons Clause License Condition v1.0](https://commonsclause.com/), which allows for modification and distribution only for personal purposes.
