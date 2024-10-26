@@ -3,9 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Eye, EyeOff } from 'lucide-react';
+import { Switch } from "@/components/ui/switch";
 import QRCode from 'qrcode';
-import { createBox } from '@/firebase/dbOp';
+import { createBox, Box } from '@/firebase/dbOp';
 
 interface PackagingSymbol {
   name: string;
@@ -38,11 +39,9 @@ const designs: Design[] = [
     render: (ctx, props) => {
       const { canvas, boxName, boxDescription, qrCodeData, selectedSymbols } = props;
       
-      // Background
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Text
       ctx.fillStyle = 'black';
       ctx.font = 'bold 24px Arial';
       ctx.textAlign = 'center';
@@ -51,12 +50,10 @@ const designs: Design[] = [
       ctx.font = '14px Arial';
       ctx.fillText(boxDescription, canvas.width / 2, 50);
       
-      // QR Code
       const qrImage = new Image();
       qrImage.onload = () => {
         ctx.drawImage(qrImage, 75, 70, 150, 150);
         
-        // Symbols
         selectedSymbols.forEach((symbol, index) => {
           const symbolImage = new Image();
           symbolImage.onload = () => {
@@ -73,16 +70,13 @@ const designs: Design[] = [
     render: (ctx, props) => {
       const { canvas, boxName, boxDescription, qrCodeData, selectedSymbols } = props;
       
-      // Background
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Border
       ctx.strokeStyle = 'black';
       ctx.lineWidth = 2;
       ctx.strokeRect(0, 0, canvas.width, canvas.height);
       
-      // Text
       ctx.fillStyle = 'black';
       ctx.font = 'bold 24px Arial';
       ctx.textAlign = 'center';
@@ -91,12 +85,10 @@ const designs: Design[] = [
       ctx.font = '14px Arial';
       ctx.fillText(boxDescription, canvas.width / 2, 60);
       
-      // QR Code
       const qrImage = new Image();
       qrImage.onload = () => {
         ctx.drawImage(qrImage, 85, 80, 150, 150);
         
-        // Symbols
         selectedSymbols.forEach((symbol, index) => {
           const symbolImage = new Image();
           symbolImage.onload = () => {
@@ -113,14 +105,12 @@ const designs: Design[] = [
     render: (ctx, props) => {
       const { canvas, boxName, boxDescription, qrCodeData, selectedSymbols } = props;
       
-      // Background
       const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
       gradient.addColorStop(0, '#ff9a9e');
       gradient.addColorStop(1, '#fad0c4');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Text
       ctx.fillStyle = '#333';
       ctx.font = 'bold 24px Arial';
       ctx.textAlign = 'center';
@@ -130,12 +120,10 @@ const designs: Design[] = [
       ctx.font = '14px Arial';
       ctx.fillText(boxDescription, canvas.width / 2, 60);
       
-      // QR Code
       const qrImage = new Image();
       qrImage.onload = () => {
         ctx.drawImage(qrImage, 75, 80, 150, 150);
         
-        // Symbols
         selectedSymbols.forEach((symbol, index) => {
           const symbolImage = new Image();
           symbolImage.onload = () => {
@@ -149,13 +137,21 @@ const designs: Design[] = [
   },
 ];
 
-const CreateBoxForm: React.FC = () => {
+interface CreateBoxFormProps {
+  onBoxCreated: (newBox: Box) => void;
+}
+
+
+const CreateBoxForm: React.FC<CreateBoxFormProps> = ({ onBoxCreated }) => {
   const [newBoxName, setNewBoxName] = useState<string>('');
   const [newBoxDescription, setNewBoxDescription] = useState<string>('');
   const [qrCodeData, setQRCodeData] = useState<string>('');
   const [selectedSymbols, setSelectedSymbols] = useState<PackagingSymbol[]>([]);
   const [selectedDesign, setSelectedDesign] = useState<Design>(designs[0]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isPrivate, setIsPrivate] = useState<boolean>(false);
+  const [accessCode, setAccessCode] = useState<string>('');
+  const [showAccessCode, setShowAccessCode] = useState<boolean>(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -193,10 +189,8 @@ const CreateBoxForm: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Render the selected design
     selectedDesign.render(ctx, {
       qrCodeData,
       boxName: newBoxName,
@@ -212,23 +206,43 @@ const CreateBoxForm: React.FC = () => {
       setIsLoading(true);
       try {
         const pngDataUrl = canvasRef.current.toDataURL('image/png');
-        await createBox(newBoxName, newBoxDescription, pngDataUrl);
+        const boxId = await createBox(
+          newBoxName, 
+          newBoxDescription, 
+          pngDataUrl, 
+          isPrivate, 
+          isPrivate ? accessCode : undefined
+        );
         
-        // Reset form
+        const newBox: Box = {
+          id: boxId,
+          name: newBoxName,
+          description: newBoxDescription,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          qrCodeUrl: pngDataUrl,
+          isPrivate,
+          ...(isPrivate && { accessCode })
+        };
+        
+        onBoxCreated(newBox);
+        
         setNewBoxName('');
         setNewBoxDescription('');
         setQRCodeData('');
-        setSelectedSymbols([]);
+        setIsPrivate(false);
+        setAccessCode('');
         
-        // You might want to show a success message or redirect the user here
-        console.log('Box created successfully!');
       } catch (error) {
         console.error('Error creating box:', error);
-        // You might want to show an error message to the user here
       } finally {
         setIsLoading(false);
       }
     }
+  };
+
+  const handleAccessCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAccessCode(e.target.value.replace(/\D/g, '').slice(0, 6));
   };
 
   return (
@@ -288,12 +302,46 @@ const CreateBoxForm: React.FC = () => {
               ))}
             </div>
           </div>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="private-mode"
+              checked={isPrivate}
+              onCheckedChange={setIsPrivate}
+            />
+            <Label htmlFor="private-mode">Private Box</Label>
+          </div>
+          {isPrivate && (
+            <div className="space-y-2">
+              <Label htmlFor="accessCode">Access Code (6 digits)</Label>
+              <div className="relative">
+                <Input
+                  id="accessCode"
+                  type={showAccessCode ? "text" : "password"}
+                  value={accessCode}
+                  onChange={handleAccessCodeChange}
+                  placeholder="Enter 6-digit access code"
+                  pattern="\d{6}"
+                  required={isPrivate}
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowAccessCode(!showAccessCode)}
+                >
+                  {showAccessCode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          )}
           {qrCodeData && (
             <div className="mt-4">
               <canvas ref={canvasRef} width={300} height={400} style={{ width: '300px', height: '400px' }} />
             </div>
           )}
-          <Button type="submit" disabled={!newBoxName.trim() || !qrCodeData || isLoading}>
+          <Button type="submit" disabled={!newBoxName.trim() || !qrCodeData || isLoading || (isPrivate && accessCode.length !== 6)}>
             <PlusCircle className="mr-2 h-4 w-4" /> 
             {isLoading ? 'Creating...' : 'Create Box'}
           </Button>

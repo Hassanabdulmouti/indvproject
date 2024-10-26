@@ -2,9 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { getBoxContents, getBoxDetails } from '@/firebase/dbOp';
+import { getBoxContents, getBoxDetails, validateAccessCode } from '@/firebase/dbOp';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Eye, EyeOff } from 'lucide-react';
 
 interface BoxContent {
   id: string;
@@ -16,6 +19,7 @@ interface BoxContent {
 interface BoxDetails {
   name: string;
   description: string;
+  isPrivate: boolean;
 }
 
 const BoxContentPage: React.FC = () => {
@@ -24,16 +28,21 @@ const BoxContentPage: React.FC = () => {
   const [boxDetails, setBoxDetails] = useState<BoxDetails | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [accessCode, setAccessCode] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showAccessCode, setShowAccessCode] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [fetchedContents, fetchedDetails] = await Promise.all([
-          getBoxContents(id as string),
-          getBoxDetails(id as string)
-        ]);
-        setContents(fetchedContents as BoxContent[]);
+        const fetchedDetails = await getBoxDetails(id as string);
         setBoxDetails(fetchedDetails as BoxDetails);
+        
+        if (!fetchedDetails.isPrivate) {
+          const fetchedContents = await getBoxContents(id as string);
+          setContents(fetchedContents as BoxContent[]);
+          setIsAuthenticated(true);
+        }
       } catch (err) {
         setError('Failed to fetch box data');
       } finally {
@@ -44,8 +53,70 @@ const BoxContentPage: React.FC = () => {
     fetchData();
   }, [id]);
 
+  const handleAccessCodeSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const isValid = await validateAccessCode(id as string, accessCode);
+      if (isValid) {
+        const fetchedContents = await getBoxContents(id as string);
+        setContents(fetchedContents as BoxContent[]);
+        setIsAuthenticated(true);
+      } else {
+        setError('Invalid access code');
+      }
+    } catch (err) {
+      setError('Failed to validate access code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAccessCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value.replace(/\D/g, '').slice(0, 6);
+    setAccessCode(newValue);
+  };
+
   if (loading) return <div>Loading...</div>;
   if (error) return <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>;
+
+  if (boxDetails?.isPrivate && !isAuthenticated) {
+    return (
+      <div className="container mx-auto p-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Private Box</CardTitle>
+            <CardDescription>This box is private. Please enter the access code to view its contents.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAccessCodeSubmit}>
+              <div className="relative">
+                <Input
+                  type={showAccessCode ? "text" : "password"}
+                  value={accessCode}
+                  onChange={handleAccessCodeChange}
+                  placeholder="Enter 6-digit access code"
+                  pattern="\d{6}"
+                  required
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowAccessCode(!showAccessCode)}
+                >
+                  {showAccessCode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <Button type="submit" className="mt-2">Submit</Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-4">

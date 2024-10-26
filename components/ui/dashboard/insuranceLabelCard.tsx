@@ -1,38 +1,72 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState } from 'react';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { BoxIcon, Trash2, QrCode, Download, Lock, Unlock, Share2, Eye, EyeOff, Mail, Link as LinkIcon, Loader2, Plus, Check, X } from 'lucide-react';
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Box, Contact, createContact, getUserContacts, deleteContact } from '@/firebase/dbOp';
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Receipt,
+  Trash2,
+  Download,
+  Lock,
+  Unlock,
+  Share2,
+  Eye,
+  EyeOff,
+  Mail,
+  Link as LinkIcon,
+  Loader2,
+  Plus,
+  Check,
+  QrCode,
+} from 'lucide-react';
+import { InsuranceLabel, Contact, getUserContacts, createContact } from '@/firebase/dbOp';
 import { functions } from '@/firebase/clientApp';
 import { httpsCallable } from 'firebase/functions';
+import { formatCurrency } from '@/lib/config/insurance';
 
-interface BoxCardProps {
-  box: Box;
+interface InsuranceLabelCardProps {
+  label: InsuranceLabel;
   onViewDetails: () => void;
-  onDeleteBox: () => void;
+  onShare: () => void;
+  onPrint: () => void;
   onPrivacyChange?: (isPrivate: boolean) => Promise<void>;
+  onDeleteLabel?: (labelId: string) => Promise<void>;
 }
 
-const BoxCard: React.FC<BoxCardProps> = ({
-  box,
+const InsuranceLabelCard: React.FC<InsuranceLabelCardProps> = ({
+  label,
   onViewDetails,
-  onDeleteBox,
-  onPrivacyChange
+  onShare,
+  onPrint,
+  onPrivacyChange,
+  onDeleteLabel
 }) => {
-
+  const [showAccessCode, setShowAccessCode] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isEmailShareDialogOpen, setIsEmailShareDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [showAccessCode, setShowAccessCode] = useState(false);
+  const [isAddingContact, setIsAddingContact] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedContactEmails, setSelectedContactEmails] = useState<string[]>([]);
@@ -42,19 +76,9 @@ const BoxCard: React.FC<BoxCardProps> = ({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailSuccess, setEmailSuccess] = useState(false);
   
-  const [isAddingContact, setIsAddingContact] = useState(false);
   const [newContactName, setNewContactName] = useState('');
   const [newContactEmail, setNewContactEmail] = useState('');
   const [contactError, setContactError] = useState<string | null>(null);
-
-  const qrCodeRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (qrCodeRef.current && box.qrCodeUrl) {
-      qrCodeRef.current.innerHTML = box.qrCodeUrl;
-    }
-    loadContacts();
-  }, [box.qrCodeUrl]);
 
   const loadContacts = async () => {
     try {
@@ -75,15 +99,28 @@ const BoxCard: React.FC<BoxCardProps> = ({
     return emailArray.every(email => validateEmail(email));
   };
 
+  const handleDelete = async () => {
+    if (!onDeleteLabel) return;
+    setIsDeleting(true);
+    try {
+      await onDeleteLabel(label.id);
+      setIsDeleteDialogOpen(false);
+    } catch (error) {
+      console.error('Error deleting label:', error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleDownloadDesign = async () => {
-    if (box.qrCodeUrl) {
+    if (label.qrCodeUrl) {
       try {
-        const response = await fetch(box.qrCodeUrl);
+        const response = await fetch(label.qrCodeUrl);
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${box.name}-design.png`;
+        link.download = `${label.name}-insurance-label.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -94,8 +131,18 @@ const BoxCard: React.FC<BoxCardProps> = ({
     }
   };
 
+  const handlePrivacyToggle = async () => {
+    if (onPrivacyChange) {
+      try {
+        await onPrivacyChange(!label.isPrivate);
+      } catch (error) {
+        console.error('Error toggling privacy:', error);
+      }
+    }
+  };
+
   const handleCopyLink = async () => {
-    const shareUrl = `${window.location.origin}/box/${box.id}`;
+    const shareUrl = `${window.location.origin}/label/${label.id}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
@@ -105,15 +152,48 @@ const BoxCard: React.FC<BoxCardProps> = ({
     }
   };
 
-  const handleDelete = async () => {
-    setIsDeleting(true);
+  const handleEmailShare = async () => {
+    setEmailError(null);
+    setEmailSuccess(false);
+
+    const allEmails = [
+      ...selectedContactEmails,
+      ...manualEmails.split(',').map(email => email.trim()).filter(email => email)
+    ];
+
+    if (allEmails.length === 0) {
+      setEmailError('Please select at least one recipient');
+      return;
+    }
+
+    if (manualEmails && !validateEmails(manualEmails)) {
+      setEmailError('Please enter valid email addresses');
+      return;
+    }
+
+    setIsSendingEmail(true);
+
     try {
-      await onDeleteBox();
-      setIsDeleteDialogOpen(false);
+      const shareInsuranceLabel = httpsCallable(functions, 'shareLabelViaEmail');
+      await shareInsuranceLabel({
+        labelId: label.id,
+        recipientEmails: allEmails,
+        message: emailMessage.trim(),
+        origin: window.location.origin
+      });
+
+      setEmailSuccess(true);
+      setTimeout(() => {
+        setIsEmailShareDialogOpen(false);
+        setSelectedContactEmails([]);
+        setManualEmails('');
+        setEmailMessage('');
+      }, 2000);
     } catch (error) {
-      console.error('Error deleting box:', error);
+      setEmailError('Failed to share label');
+      console.error('Error sharing label:', error);
     } finally {
-      setIsDeleting(false);
+      setIsSendingEmail(false);
     }
   };
 
@@ -142,68 +222,13 @@ const BoxCard: React.FC<BoxCardProps> = ({
     }
   };
 
-  const handleEmailShare = async () => {
-    setEmailError(null);
-    setEmailSuccess(false);
-
-    const allEmails = [
-      ...selectedContactEmails,
-      ...manualEmails.split(',').map(email => email.trim()).filter(email => email)
-    ];
-
-    if (allEmails.length === 0) {
-      setEmailError('Please select at least one contact or enter an email address');
-      return;
-    }
-
-    if (manualEmails && !validateEmails(manualEmails)) {
-      setEmailError('Please enter valid email addresses');
-      return;
-    }
-
-    setIsSendingEmail(true);
-
-    try {
-      const shareBoxViaEmail = httpsCallable(functions, 'shareBoxViaEmail');
-      await shareBoxViaEmail({
-        boxId: box.id,
-        recipientEmails: allEmails,
-        message: emailMessage.trim(),
-        origin: window.location.origin
-      });
-
-      setEmailSuccess(true);
-      setTimeout(() => {
-        setIsEmailShareDialogOpen(false);
-        setManualEmails('');
-        setSelectedContactEmails([]);
-        setEmailMessage('');
-        setEmailSuccess(false);
-      }, 2000);
-    } catch (err) {
-      setEmailError(err instanceof Error ? err.message : 'Error sharing via email');
-    } finally {
-      setIsSendingEmail(false);
-    }
-  };
-
-  const handlePrivacyToggle = async () => {
-    if (onPrivacyChange) {
-      try {
-        await onPrivacyChange(!box.isPrivate);
-      } catch (error) {
-        console.error('Error toggling privacy:', error);
-      }
-    }
-  };
-
   const renderShareDialog = () => (
     <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share {box.name}</DialogTitle>
+          <DialogTitle>Share {label.name}</DialogTitle>
           <DialogDescription>
-            Choose how you'd like to share this digital label
+            Choose how you'd like to share this insurance label
           </DialogDescription>
         </DialogHeader>
         
@@ -214,6 +239,7 @@ const BoxCard: React.FC<BoxCardProps> = ({
             onClick={() => {
               setIsShareDialogOpen(false);
               setIsEmailShareDialogOpen(true);
+              loadContacts();
             }}
           >
             <Mail className="mr-2 h-4 w-4" />
@@ -234,7 +260,7 @@ const BoxCard: React.FC<BoxCardProps> = ({
             <div className="flex space-x-2">
               <Input
                 readOnly
-                value={`${window.location.origin}/box/${box.id}`}
+                value={`${window.location.origin}/label/${label.id}`}
                 className="flex-1"
               />
               <Button variant="outline" onClick={handleCopyLink}>
@@ -244,10 +270,10 @@ const BoxCard: React.FC<BoxCardProps> = ({
           </div>
         </div>
 
-        {box.isPrivate && (
+        {label.isPrivate && (
           <Alert>
             <AlertDescription>
-              This box is private. Only people with the access code can view its contents.
+              This label is private. Only people with the access code can view its contents.
             </AlertDescription>
           </Alert>
         )}
@@ -259,7 +285,7 @@ const BoxCard: React.FC<BoxCardProps> = ({
     <Dialog open={isEmailShareDialogOpen} onOpenChange={setIsEmailShareDialogOpen}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share {box.name} via Email</DialogTitle>
+          <DialogTitle>Share {label.name} via Email</DialogTitle>
           <DialogDescription>
             Select contacts or enter email addresses manually
           </DialogDescription>
@@ -345,11 +371,11 @@ const BoxCard: React.FC<BoxCardProps> = ({
 
           {emailSuccess && (
             <Alert>
-              <AlertDescription>Digital label shared successfully!</AlertDescription>
+              <AlertDescription>Insurance label shared successfully!</AlertDescription>
             </Alert>
           )}
 
-          {box.isPrivate && (
+          {label.isPrivate && (
             <Alert>
               <AlertDescription>
                 Recipients will receive the access code in their email.
@@ -430,120 +456,165 @@ const BoxCard: React.FC<BoxCardProps> = ({
 
   return (
     <>
-<Card className="w-full">
+      <Card className="w-full">
         <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle className="flex-1 truncate mr-2">{box.name}</CardTitle>
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <CardTitle className="truncate mr-2">{label.name}</CardTitle>
+              <CardDescription className="line-clamp-2">
+              {label.description || 'No description'}
+              </CardDescription>
+            </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handlePrivacyToggle}
-                title={box.isPrivate ? "Make Public" : "Make Private"}
-              >
-                <Badge variant={box.isPrivate ? "secondary" : "default"}>
-                  {box.isPrivate ? (
-                    <><Lock className="h-3 w-3 mr-1" /> Private</>
-                  ) : (
-                    <><Unlock className="h-3 w-3 mr-1" /> Public</>
-                  )}
-                </Badge>
-              </Button>
+              {onPrivacyChange && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handlePrivacyToggle}
+                  title={label.isPrivate ? "Make Public" : "Make Private"}
+                >
+                  <Badge variant={label.isPrivate ? "secondary" : "default"}>
+                    {label.isPrivate ? (
+                      <><Lock className="h-3 w-3 mr-1" /> Private</>
+                    ) : (
+                      <><Unlock className="h-3 w-3 mr-1" /> Public</>
+                    )}
+                  </Badge>
+                </Button>
+              )}
+              {label.insuranceCompany && (
+                <img
+                  src={label.insuranceCompany.logoUrl}
+                  alt={label.insuranceCompany.name}
+                  className="h-8 object-contain"
+                />
+              )}
             </div>
           </div>
-          <CardDescription className="line-clamp-2">
-            {box.description}
-          </CardDescription>
         </CardHeader>
 
-        <CardContent>
-          <div className="space-y-4">
-            <div className="text-sm text-muted-foreground">
-              Created: {box.createdAt.toLocaleDateString()}
-            </div>
-            
-            {box.isPrivate && box.accessCode && (
-              <div className="flex items-center gap-2">
-                <Label>Access Code:</Label>
-                <div className="flex-1 relative">
-                  <Input
-                    type={showAccessCode ? "text" : "password"}
-                    value={box.accessCode}
-                    readOnly
-                    className="pr-10"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0"
-                    onClick={() => setShowAccessCode(!showAccessCode)}
-                  >
-                    {showAccessCode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-            )}
+        <CardContent className="space-y-4">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Created:</span>
+            <span>{label.createdAt.toLocaleDateString()}</span>
+          </div>
 
-            {box.qrCodeUrl && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold">QR Code Design:</h3>
-                <div className="flex justify-center">
-                  <img
-                    src={box.qrCodeUrl}
-                    alt="QR Code Design"
-                    className="max-w-xs w-full h-auto"
-                  />
-                </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Total Value:</span>
+            <span className="font-medium">
+              {formatCurrency(label.totalValue, label.currency)}
+            </span>
+          </div>
+
+          {label.isPrivate && label.accessCode && (
+            <div className="flex items-center gap-2">
+              <Label>Access Code:</Label>
+              <div className="flex-1 relative">
+                <Input
+                  type={showAccessCode ? "text" : "password"}
+                  value={label.accessCode}
+                  readOnly
+                  className="pr-10"
+                />
                 <Button
-                  className="w-full"
-                  variant="outline"
-                  onClick={handleDownloadDesign}
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full"
+                  onClick={() => setShowAccessCode(!showAccessCode)}
                 >
-                  <Download className="mr-2 h-4 w-4" /> Download Design
+                  {showAccessCode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
+            </div>
+          )}
+
+          {label.qrCodeUrl && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold">Label Design:</h3>
+              <div className="flex justify-center">
+                <img
+                  src={label.qrCodeUrl}
+                  alt="Label Design"
+                  className="max-w-xs w-full h-auto"
+                />
+              </div>
+              <Button
+                className="w-full"
+                variant="outline"
+                onClick={handleDownloadDesign}
+              >
+                <Download className="mr-2 h-4 w-4" /> Download Design
+              </Button>
+            </div>
+          )}
+
+          <ScrollArea className="h-[120px] border rounded-md p-2">
+            {label.items?.length > 0 ? (
+              label.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-2 py-1 hover:bg-accent rounded-md px-2"
+                >
+                  {item.imageUrl && (
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      className="w-8 h-8 object-cover rounded"
+                    />
+                  )}
+                  <div className="flex-1">
+                    <span className="text-sm font-medium">{item.name}</span>
+                    {item.description && (
+                      <p className="text-xs text-muted-foreground">{item.description}</p>
+                    )}
+                  </div>
+                  <span className="text-sm font-medium">
+                    {formatCurrency(item.value, item.currency || label.currency)}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                No items added yet
+              </div>
             )}
-          </div>
+          </ScrollArea>
         </CardContent>
 
         <CardFooter className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={onViewDetails}>
-            <BoxIcon className="mr-2 h-4 w-4" /> Details
+            <Receipt className="mr-2 h-4 w-4" /> Details
           </Button>
           <Button variant="outline" onClick={() => setIsShareDialogOpen(true)}>
             <Share2 className="mr-2 h-4 w-4" /> Share
           </Button>
           <Button
             variant="outline"
-            onClick={() => window.open(`${window.location.origin}/box/${box.id}`, '_blank')}
+            onClick={() => window.open(`${window.location.origin}/label/${label.id}`, '_blank')}
           >
             <QrCode className="mr-2 h-4 w-4" /> View
           </Button>
-          <Button
-            variant="destructive"
-            onClick={() => setIsDeleteDialogOpen(true)}
-          >
-            <Trash2 className="mr-2 h-4 w-4" /> Delete
+          <Button variant="outline" onClick={handleDownloadDesign}>
+            <Download className="mr-2 h-4 w-4" /> Download
           </Button>
+          {onDeleteLabel && (
+            <Button
+              variant="destructive"
+              onClick={() => setIsDeleteDialogOpen(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
+            </Button>
+          )}
         </CardFooter>
       </Card>
-
-      {/* Share Dialog */}
-      {renderShareDialog()}
-
-      {/* Email Share Dialog */}
-      {renderEmailShareDialog()}
-
-      {/* Add Contact Dialog */}
-      {renderAddContactDialog()}
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Box</DialogTitle>
+            <DialogTitle>Delete Insurance Label</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{box.name}"? This action cannot be undone.
+              Are you sure you want to delete "{label.name}"? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -574,8 +645,13 @@ const BoxCard: React.FC<BoxCardProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Share Dialogs */}
+      {renderShareDialog()}
+      {renderEmailShareDialog()}
+      {renderAddContactDialog()}
     </>
   );
 };
 
-export default BoxCard;
+export default InsuranceLabelCard;
